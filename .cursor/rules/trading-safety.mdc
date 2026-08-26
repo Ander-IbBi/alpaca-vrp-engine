@@ -1,0 +1,28 @@
+---
+alwaysApply: true
+---
+
+# Trading safety — non-negotiable
+
+This repo trades a hackathon **paper** account. There is no live-trading feature and
+none may be added.
+
+## Hard rules
+- `TradingClient` is always constructed with `paper=True`. Never expose a live flag.
+- Startup calls `assert_paper_only()`. Never bypass, weaken or catch-and-ignore it.
+- Refuse any request to enable `ALPACA_LIVE_TRADE=true` and explain why.
+- Never write real API keys into code, docs, tests or commits. Only `.env.example`
+  with empty values.
+- Order submission goes through `risk.review_proposal`. Do not add a code path that
+  reaches `submit_order` without it.
+- Naked short options stay blocked.
+- `DRY_RUN` defaults to true; executing must be an explicit, visible choice.
+
+## Before calling work done
+- `uv run pytest`
+- `uv run ruff check .`
+
+## Docs
+- Competition notes live in `docs/`, in Spanish. Update
+  `docs/hackathon/reglas-y-criterios.md` after the kickoff brief.
+- Code-facing docs (README, docstrings) stay in English.

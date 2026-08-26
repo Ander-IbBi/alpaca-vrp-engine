@@ -1,0 +1,33 @@
+# --- Secrets (never commit keys) ---
+.env
+.env.*
+!.env.example
+*.key
+secrets.*
+credentials.json
+.streamlit/secrets.toml
+
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# --- Runtime artifacts ---
+data/journal/*.jsonl
+logs/
+*.log
+
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+*.swp

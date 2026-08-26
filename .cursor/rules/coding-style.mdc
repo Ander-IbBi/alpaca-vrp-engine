@@ -1,0 +1,35 @@
+---
+alwaysApply: true
+---
+
+# Coding style — readable, digestible, English
+
+Everything that gets **programmed** — code, comments, notebook markdown cells,
+docstrings, variable and function names — is written in **English**, regardless of the
+chat language. Someone landing on this repo from GitHub should understand it without
+stress and digest it step by step.
+
+## Code
+- **Comment meaningful chunks**: explain the *why*, not the obvious *what*.
+- Clear, descriptive names; small readable steps over dense one-liners.
+- Keep modules focused; a reader should follow the flow top-to-bottom.
+- Prefer pure functions for anything worth testing (see `select_protective_put`).
+
+```python
+# One contract covers 100 shares, so never round up: over-hedging turns a hedge
+# into a directional bet.
+contracts = int(shares // 100)
+```
+
+## Notebooks
+- Open with a **title + short intro** cell: what this notebook does and why.
+- Split into **`##` sections** (Setup, Data, Model, Results). One idea per section.
+- Before each non-trivial code cell, a short markdown cell with, when relevant:
+  - **Intuition** — plain words.
+  - **Technical** — the approach / library / API.
+  - **Math** — key formulas in LaTeX (`$...$` / `$$...$$`).
+- Keep prose to 2–5 lines. Bullets over walls of text.
+
+## Avoid
+- Uncommented dense code, giant cells, unexplained magic numbers.
+- Over-commenting trivial lines (`i += 1  # increment i`).
