@@ -38,6 +38,9 @@ class Settings(BaseSettings):
 
     max_contracts_per_order: int = Field(default=5, ge=1)
     max_order_notional_usd: float = Field(default=2_500.0, gt=0)
+    # Stock seed is a separate ticket: 100 SPY is ~$77k, not an options premium.
+    max_equity_notional_usd: float = Field(default=80_000.0, gt=0)
+    seed_shares: int = Field(default=100, ge=1)
     max_daily_loss_usd: float = Field(default=1_500.0, gt=0)
     min_equity_usd: float = Field(default=80_000.0, ge=0)
 

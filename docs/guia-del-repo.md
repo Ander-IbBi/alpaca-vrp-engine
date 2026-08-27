@@ -22,8 +22,8 @@ alpaca-options-agent/
 ## El flujo, en una frase
 
 `agent/loop.py` construye un **contexto** → `strategy/` propone un **ProposedTrade** →
-`risk/` lo aprueba o lo veta → `alpaca/orders.py` lo convierte en un ticket →
-`journal.py` lo registra → Streamlit lo enseña.
+`risk/` lo aprueba o lo veta → el LLM explica (veto suave) → `alpaca/orders.py`
+convierte el ticket → `journal.py` lo registra → Streamlit lo enseña.
 
 ## `src/options_agent/`
 
@@ -32,27 +32,27 @@ alpaca-options-agent/
 | `config.py` | Cargar `.env` y **abortar si live** | Un sitio para keys |
 | `journal.py` | Traza JSONL de cada decisión | Un logger de debug |
 | `alpaca/client.py` | Cliente paper, cuenta, posiciones, precios | Un cliente configurable a live |
-| `alpaca/options.py` | Contratos y cadena, normalizados a `OptionCandidate` | La estrategia |
-| `alpaca/orders.py` | Construir y enviar el ticket (single o multi-leg) | Quien decide si se opera |
-| `risk/limits.py` | Límites por orden (tamaño, coste, short desnudo) | Negociable por el LLM |
+| `alpaca/options.py` | Cadena con bid/ask/delta/IV, normalizada a `OptionCandidate` | La estrategia |
+| `alpaca/orders.py` | Construir y enviar el ticket (acciones, single o multi-leg) | Quien decide si se opera |
+| `risk/limits.py` | Límites por orden, max loss del collar, call cubierto | Negociable por el LLM |
 | `risk/account.py` | Circuit breaker (suelo de equity, pérdida diaria) | Un stop loss por posición |
 | `strategy/base.py` | Vocabulario común (`ProposedTrade`, `StrategyContext`) | Lógica de mercado |
-| `strategy/overlay.py` | Protective put: elegir strike y tamaño | Definitivo (se cambia tras kickoff) |
-| `agent/loop.py` | El ciclo completo | La UI |
+| `strategy/overlay.py` | Collar agresivo: semilla SPY + put/call por delta | Un meta-agente que cambia de producto |
+| `agent/loop.py` | El ciclo completo, mercado cerrado, `--loop` | La UI |
 | `agent/tools.py` | Tools que el LLM puede llamar (solo lectura) | Una puerta trasera al broker |
-| `agent/llm.py` | Advisor opcional; sin key funciona igual | Requisito para operar |
+| `agent/llm.py` | Explica el ciclo; veto suave fail-open | Quien decide el trade |
 
 ### Por qué riesgo y estrategia están separados
 
 Un LLM puede alucinar un trade absurdo. La estrategia propone; `review_proposal`
-decide. Como el riesgo es código puro, se testea sin tocar Alpaca y no hay forma de
-que el modelo lo desactive.
+decide. El modelo solo explica y, como mucho, aplica un veto de lista blanca
+(`stale_quote`, `duplicate`, `wide_spread`). Si el LLM cae, el ciclo sigue.
 
 ### La parte testeable de verdad
 
-`select_protective_put()` es una función pura: le pasas contratos, spot y fecha, y
-devuelve el strike elegido. Por eso `tests/test_strategy.py` puede comprobar la
-lógica de cobertura sin mercado abierto.
+`select_collar()` es una función pura: le pasas contratos con delta y mid, spot y
+fecha, y devuelve put y call. Por eso `tests/test_strategy.py` comprueba el collar
+sin mercado abierto.
 
 ## `app/`
 
@@ -63,12 +63,12 @@ jurado no existe.
 ## `scripts/`
 
 - `smoke_paper.py` — ¿funcionan las keys? Clock + cuenta. Correr esto primero.
-- `run_agent.py` — un ciclo; `--execute` para mandar la orden de verdad.
+- `run_agent.py` — un ciclo; `--execute` para mandar la orden; `--loop` para dejarlo tirado.
 
 ## `tests/`
 
-Cuatro archivos: config (paper-only), risk (vetos), strategy (selección de strike),
-orders + journal (tickets y traza). Ninguno usa red, así que corren en CI sin secrets.
+Config, risk, strategy (collar + semilla), orders + journal, options (OCC/quotes),
+LLM (parseo y fail-open). Ninguno usa red, así que corren en CI sin secrets.
 
 ## `docs/`
 
@@ -81,5 +81,6 @@ El vault de Obsidian `Vault/deep-hedging` queda aparte, para la teoría.
 uv run pytest                                 # tests
 uv run ruff check .                           # lint
 uv run python scripts/run_agent.py            # ciclo en dry run
+uv run python scripts/run_agent.py --loop --interval 900
 uv run streamlit run app/streamlit_app.py     # demo
 ```

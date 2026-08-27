@@ -22,7 +22,9 @@ from options_agent.journal import Journal  # noqa: E402
 
 st.set_page_config(page_title="Alpaca Options Overlay Agent", layout="wide")
 st.title("Options Overlay Agent")
-st.caption("Alpaca paper trading only - an AI agent that hedges an equity book with options")
+st.caption(
+    "Alpaca paper trading only — a defined-risk collar overlay (long stock, long put, short call)"
+)
 
 try:
     settings = assert_paper_only(load_settings())
@@ -64,7 +66,18 @@ if positions:
         width="stretch",
     )
 else:
-    st.info("No positions yet. The overlay needs an equity book before it can hedge.")
+    st.info("Flat book. The first cycle seeds 100 shares of the watchlist name, then collars it.")
+
+st.subheader("Playbook")
+st.markdown(
+    """
+1. **Seed** 100 shares of SPY if the book is empty.
+2. **Collar** — buy a put near delta −0.20, sell a call near delta +0.20, same expiry (21–45 DTE).
+3. **Hold** — if the collar is already on, skip. No mid-week strategy rewrite.
+4. **Gates** — account circuit breaker, per-order limits, covered short call, then an LLM
+   explanation (soft veto only; code still decides).
+"""
+)
 
 st.subheader("Agent")
 left, right = st.columns([1, 3])
@@ -73,14 +86,22 @@ with left:
     run = st.button("Run one cycle", type="primary")
 with right:
     st.write(
-        "Each cycle reads the account, proposes a defined-risk options overlay, "
-        "runs the risk checks, and records the outcome."
+        "Each cycle reads the account, proposes the next playbook step, runs the risk "
+        "checks, asks the LLM to explain, and records the outcome."
     )
 
 if run:
     cycle = OverlayAgent(client).run_once(execute=execute)
     for note in cycle.notes:
         st.write(f"- {note}")
+    if cycle.proposal is not None and not cycle.proposal.skip:
+        st.write(f"**Proposal** ({cycle.proposal.kind}): {cycle.proposal.rationale}")
+        if cycle.proposal.limit_price is not None:
+            st.write(f"Limit (net mid): ${cycle.proposal.limit_price:.2f}")
+    if cycle.risk is not None:
+        st.write(f"**Risk:** {cycle.risk.summary()}")
+    if cycle.llm is not None:
+        st.write(f"**LLM ({cycle.llm.advisor}):** {cycle.llm.explanation}")
     st.json(cycle.model_dump(mode="json", exclude_none=True))
 
 st.subheader("Decision journal")

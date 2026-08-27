@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 
 from options_agent.agent.loop import OverlayAgent
 from options_agent.alpaca.client import PaperAlpaca
@@ -33,12 +34,23 @@ def smoke() -> int:
 
 
 def run_agent() -> int:
-    """Run one agent cycle. Executing real paper orders requires --execute."""
-    parser = argparse.ArgumentParser(description="Run one options overlay agent cycle.")
+    """Run one agent cycle, or a loop during the session. `--execute` sends paper orders."""
+    parser = argparse.ArgumentParser(description="Run the options overlay agent.")
     parser.add_argument(
         "--execute",
         action="store_true",
         help="Actually submit the order to the paper account (default: dry run).",
+    )
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Repeat the cycle until interrupted.",
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=900,
+        help="Seconds between cycles when --loop is set (default: 900).",
     )
     args = parser.parse_args()
 
@@ -49,10 +61,23 @@ def run_agent() -> int:
         print(f"ERROR: {exc}")
         return 1
 
-    cycle = OverlayAgent(client).run_once(execute=args.execute or None)
+    agent = OverlayAgent(client)
+    execute = True if args.execute else None
+    if args.loop:
+        return _run_loop(agent, execute=execute, interval=max(args.interval, 30))
+
+    cycle = agent.run_once(execute=execute)
     print(json.dumps(cycle.model_dump(mode="json", exclude_none=True), indent=2))
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(smoke())
+def _run_loop(agent: OverlayAgent, *, execute: bool | None, interval: int) -> int:
+    print(f"Looping every {interval}s. Ctrl+C to stop. execute={bool(execute)}")
+    try:
+        while True:
+            cycle = agent.run_once(execute=execute)
+            print(json.dumps(cycle.model_dump(mode="json", exclude_none=True), indent=2))
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("Stopped.")
+        return 0

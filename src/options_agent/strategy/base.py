@@ -12,6 +12,7 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, Field
 
 Side = Literal["buy", "sell"]
+TradeKind = Literal["option", "equity"]
 
 
 class ProposedLeg(BaseModel):
@@ -35,6 +36,10 @@ class ProposedTrade(BaseModel):
     max_loss_usd: float | None = None
     limit_price: float | None = None
     skip: bool = False
+    # Equity seeds are stock tickets; they use a separate notional cap.
+    kind: TradeKind = "option"
+    # Long shares backing any short call in this ticket (collar coverage).
+    covering_shares: float | None = None
 
     @property
     def is_multi_leg(self) -> bool:

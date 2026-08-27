@@ -1,6 +1,7 @@
-"""Translate an approved proposal into an Alpaca options order.
+"""Translate an approved proposal into an Alpaca order.
 
-Nothing here decides *whether* to trade; that already happened in `risk/`.
+Equity seeds become stock tickets. Option collars become single-leg or multi-leg
+day orders. Nothing here decides *whether* to trade; that already happened in `risk/`.
 """
 
 from __future__ import annotations
@@ -34,9 +35,18 @@ def _intent(leg: ProposedLeg) -> PositionIntent | None:
 
 
 def build_order_request(proposal: ProposedTrade) -> MarketOrderRequest | LimitOrderRequest:
-    """Single leg becomes a simple order; two or more become one multi-leg ticket."""
+    """Equity seeds are simple stock tickets; option legs stay day orders."""
     if not proposal.legs:
         raise ValueError("cannot build an order without legs")
+
+    if proposal.kind == "equity":
+        leg = proposal.legs[0]
+        return MarketOrderRequest(
+            symbol=leg.symbol,
+            qty=proposal.qty,
+            side=_side(leg),
+            time_in_force=TimeInForce.DAY,
+        )
 
     # Options only support day orders on Alpaca.
     common: dict[str, Any] = {"qty": proposal.qty, "time_in_force": TimeInForce.DAY}

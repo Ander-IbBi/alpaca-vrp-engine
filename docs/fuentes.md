@@ -26,5 +26,6 @@ Material y enlaces del proyecto.
 ## Teoría de cobertura
 
 - Protective put y collar: cobertura de riesgo definido sobre un book largo.
+  El producto usa un **collar** (put ~delta −0.20 financiado con un call ~delta +0.20).
 - Deep hedging (Bühler et al., 2019) — cobertura aprendida con costes de transacción.
   Contexto teórico; el estudio a fondo vive en el vault `Vault/deep-hedging`.

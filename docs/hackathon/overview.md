@@ -14,8 +14,9 @@ más un **demo** que los jueces puedan abrir y entender en tres minutos.
 
 ## Qué hay que construir (una frase)
 
-Un sistema que lee cuenta y mercado → propone trades de opciones → el risk layer veta o
-aprueba → ejecuta en la cuenta **paper** de Alpaca → se ve en un dashboard.
+Un sistema que lee cuenta y mercado → propone un collar (o siembra SPY) → el risk
+layer veta o aprueba → el LLM explica → ejecuta en la cuenta **paper** de Alpaca →
+se ve en un dashboard.
 
 ## Stack exigido
 
@@ -25,7 +26,7 @@ aprueba → ejecuta en la cuenta **paper** de Alpaca → se ve en un dashboard.
 | **MCP server** | Obligatorio MCP **o** CLI | Documentado en README; útil en Cursor |
 | **CLI** | Alternativa al MCP | Documentado; paper por defecto |
 | **Paper trading** | Dinero simulado, datos reales | Único modo del código |
-| **Opciones** | El track | `strategy/overlay.py` + `alpaca/orders.py` |
+| **Opciones** | El track | `strategy/overlay.py` (collar) + `alpaca/orders.py` |
 
 Los jueces **no ven tu IDE**. El entregable es repo público + demo web + vídeo.
 
@@ -41,9 +42,9 @@ presentación. Premio anunciado: **$6,000**.
 
 ## Nuestro ángulo
 
-**Overlay de cobertura**: el agente protege un book de acciones comprando puts
-(riesgo definido: lo máximo que pierdes es la prima). Es defendible ante jueces,
-encaja en el track y no depende de acertar la dirección del mercado.
+**Collar agresivo**: el agente siembra 100 SPY y cubre con un put (~delta −0.20)
+financiado vendiendo un call (~delta +0.20). Riesgo definido (suelo en el put, techo
+en el call). Un playbook, sin auto-replanteo: si ya está collared, hold.
 
 Si el kickoff empuja hacia volatilidad o alpha puro, se cambia `strategy/` y el resto
 del sistema (Alpaca, riesgo, journal, UI) sigue igual.

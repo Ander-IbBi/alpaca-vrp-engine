@@ -35,6 +35,38 @@ def test_multi_leg_builds_an_mleg_ticket() -> None:
     assert len(payload["legs"]) == 2
 
 
+def test_multi_leg_limit_order_uses_net_price() -> None:
+    proposal = ProposedTrade(
+        qty=1,
+        limit_price=1.40,
+        legs=[
+            ProposedLeg(symbol="SPY260918P00750000", side="buy"),
+            ProposedLeg(symbol="SPY260918C00790000", side="sell"),
+        ],
+    )
+    request = build_order_request(proposal)
+    payload = request.model_dump(exclude_none=True, mode="json")
+    assert payload["order_class"] == "mleg"
+    assert payload["limit_price"] == 1.40
+    assert len(payload["legs"]) == 2
+
+
+def test_equity_seed_builds_a_stock_market_order() -> None:
+    proposal = ProposedTrade(
+        qty=100,
+        kind="equity",
+        legs=[ProposedLeg(symbol="SPY", side="buy")],
+        estimated_cost_usd=77_000.0,
+    )
+    request = build_order_request(proposal)
+    payload = request.model_dump(exclude_none=True, mode="json")
+    assert payload["symbol"] == "SPY"
+    assert float(payload["qty"]) == 100
+    assert payload["side"] == "buy"
+    assert "legs" not in payload
+    assert "limit_price" not in payload
+
+
 def test_journal_round_trip(tmp_path) -> None:
     journal = Journal(tmp_path / "agent.jsonl")
     journal.append("cycle", {"note": "first"})

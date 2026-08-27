@@ -32,8 +32,8 @@ actualiza esta nota ese día.
 **P&L:** una semana es ruido. Empieza a operar el 28 con límites estrictos. El repo ya
 trae circuit breaker (`MAX_DAILY_LOSS_USD`, `MIN_EQUITY_USD`) y tope por orden.
 
-**Tech:** el LLM propone, `risk/` decide. Órdenes de opciones reales, con cadena y
-selección de strike explicable. El journal JSONL da trazabilidad.
+**Tech:** la estrategia propone, el LLM explica (veto suave), `risk/` decide. Órdenes
+de opciones reales, collar multi-leg con quotes y delta. El journal JSONL da trazabilidad.
 
 **Creatividad:** riesgo definido y hedging explicable. Nada de short desnudo.
 

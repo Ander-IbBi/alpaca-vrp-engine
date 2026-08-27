@@ -36,18 +36,18 @@ la semana.
 
 ## Qué hace nuestro agente
 
-Un **overlay de cobertura**: sobre un book de acciones, compra puts para limitar la caída.
+Un **collar agresivo** sobre un book largo de SPY: put de protección financiado con
+un call corto, misma expiry, 21–45 DTE.
 
-- **Intuición:** si tienes acciones y el mercado cae, pierdes. Un put paga justo ahí.
-- **Riesgo definido:** comprando un put, lo máximo que pierdes es la prima. Por eso el
-  risk layer prohíbe vender opciones desnudas, donde la pérdida no tiene techo.
-- **Tamaño:** un contrato cubre 100 acciones. Con 300 acciones, 3 contratos; nunca más.
-- **Strike y vencimiento:** un strike ~5% por debajo del spot y 21–60 días hasta el
-  vencimiento. Más cerca del dinero cubre mejor pero cuesta más.
-
-Matemáticamente, con $N$ acciones y strike $K$, por debajo de $K$ tu resultado deja de
-seguir a $S_T$ y queda anclado en $N \cdot K$ menos la prima pagada. Cambias una cola
-de pérdidas por un coste conocido.
+- **Intuición:** el put pone suelo; el call cobra prima y recorta el techo. Más
+  agresivo que un put suelto porque la prima neta es pequeña.
+- **Riesgo definido:** pérdida máxima ≈ `(entrada − strike_put) × 100 + neto del collar`.
+  El risk layer sigue prohibiendo vender opciones desnudas; el call corto exige 100
+  acciones de cobertura por contrato.
+- **Tamaño:** un contrato cubre 100 acciones. El playbook siembra 100 SPY y abre
+  **un** collar. Nunca más contratos que acciones / 100.
+- **Skip:** si el collar ya cubre el book, hold. No hay rolling ni cambio de
+  estructura a mitad de semana (el vencimiento elegido dura más que el evento).
 
 ## Qué es un “agente” para los jueces
 

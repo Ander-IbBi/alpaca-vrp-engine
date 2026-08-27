@@ -32,3 +32,9 @@ def test_underlyings_parse_from_comma_list() -> None:
 
 def test_dry_run_defaults_on() -> None:
     assert Settings().dry_run is True
+
+
+def test_equity_seed_defaults() -> None:
+    settings = Settings()
+    assert settings.seed_shares == 100
+    assert settings.max_equity_notional_usd == 80_000.0

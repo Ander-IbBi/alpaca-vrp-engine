@@ -2,6 +2,21 @@
 
 El esqueleto ya está. La estrategia ganadora se afina **después** del kickoff.
 
+## Punto de restauración
+
+Tag git **`restore-collar-playbook`**: el collar agresivo ya construido, **antes** de
+probar órdenes en paper. Volver a este estado de código:
+
+```bash
+git switch --detach restore-collar-playbook
+# o, si quieres mover main aquí (destructivo para commits posteriores):
+# git reset --hard restore-collar-playbook
+```
+
+Eso no deshace posiciones en Alpaca. Si una prueba paper deja SPY/opciones,
+ciérralas en el dashboard o con `close_all_positions`. La cuenta de **entrega**
+sigue siendo otra, el viernes.
+
 ## Mié 26 ago — setup
 
 - [x] Inscripción en lablab
@@ -22,14 +37,14 @@ El esqueleto ya está. La estrategia ganadora se afina **después** del kickoff.
 - Twitch: https://www.twitch.tv/lablabai
 - Actualizar [reglas-y-criterios](reglas-y-criterios.md) con el brief real
 - Abrir la **cuenta paper de entrega** y poner sus keys en `.env`
-- Comprar el book base (p. ej. SPY) y lanzar el primer ciclo del agente
+- Comprar el book base (el agente siembra 100 SPY) y lanzar el primer ciclo
 - Primeras órdenes pequeñas: el reloj del P&L empieza aquí
 
 ## Sáb 29 – lun 31 ago
 
-- Estrategia real en `strategy/` (strikes por delta/IV, rolling, collar)
-- LLM en el loop (`agent/llm.py`, `agent/tools.py`) para razonar y explicar
-- Automatizar el ciclo durante la sesión de mercado
+- [x] Estrategia real en `strategy/` (collar por delta, semilla SPY, skip si ya cubierto)
+- [x] LLM en el loop (`agent/llm.py`) para explicar; veto suave fail-open
+- [x] Automatizar el ciclo: `run_agent.py --loop --interval 900`
 - Streamlit: curva de equity, greeks y journal
 
 ## Mar 1 – mié 2 sep
