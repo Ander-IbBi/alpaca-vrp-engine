@@ -28,7 +28,8 @@ se ve en un dashboard.
 | **Paper trading** | Dinero simulado, datos reales | Único modo del código |
 | **Opciones** | El track | `strategy/overlay.py` (collar) + `alpaca/orders.py` |
 
-Los jueces **no ven tu IDE**. El entregable es repo público + demo web + vídeo.
+Los jueces **no ven tu IDE**. En el kickoff el mínimo fue: descripción + vídeo ≤5 min +
+GitHub con demo. El P&L de la semana cuenta tanto como el repo.
 
 ## Cómo se gana
 
@@ -37,8 +38,8 @@ Los jueces **no ven tu IDE**. El entregable es repo público + demo web + vídeo
 3. No volar la cuenta: mejor curva aburrida y explicable que un all-in.
 4. Presentación: README, demo URL, vídeo ≤5 min, slides.
 
-Criterios reportados (confirmar en kickoff): P&L, implementación técnica, creatividad,
-presentación. Premio anunciado: **$6,000**.
+Criterios (kickoff): P&L primero, luego API/MCP/CLI, creatividad, presentación.
+Premios main: **$2,500 / $1,500 / $1,000**. Extra social: **$500** × 2 equipos.
 
 ## Nuestro ángulo
 

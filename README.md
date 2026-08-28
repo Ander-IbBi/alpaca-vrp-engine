@@ -8,14 +8,32 @@ exclusively on **Alpaca paper trading**. Built for the
 Every cycle the agent:
 
 1. reads the paper account, positions and market clock,
-2. seeds 100 shares of SPY if the book is empty, otherwise proposes a 1x collar
-   (long put near delta −0.20, short call near delta +0.20, 21–45 DTE),
-3. runs hard risk checks that the model cannot switch off,
-4. asks an optional LLM to explain (soft veto only; unknown reasons fail open),
-5. records the decision in an append-only journal,
-6. submits a **limit** ticket at the net mid, or explains why it did not.
+2. cross-checks that view against Alpaca's **CLI** — a second client, a second auth
+   path — and refuses to trade on a book the two clients disagree about,
+3. picks the next playbook step: seed the shares, open the collar, or **manage the
+   collar that is already on**,
+4. runs hard risk checks that the model cannot switch off,
+5. asks an optional LLM to explain (soft veto only; unknown reasons fail open),
+6. records the decision in an append-only journal,
+7. submits a **limit** ticket at the net mid, or explains why it did not.
 
-Once the collar is on, later cycles **hold**. There is no automatic strategy rewrite.
+### The strategy
+
+Long 100 SPY, floored by a put near delta −0.20, financed by a short call at roughly the
+put's premium. Defined risk on both sides: the put is the floor, the shares cover the
+call, and a naked short is rejected by code.
+
+Then it is managed, every cycle, in order of urgency:
+
+| Trigger | Action | Why |
+| --- | --- | --- |
+| Short call goes in the money | Roll it up and out | The collar stops earning above the strike, and the shares risk assignment |
+| Any leg within 10 DTE | Roll the collar out | Never carry expiry or assignment risk through the week |
+| Long put worth 2x its cost | Sell it, re-arm a lower floor | A hedge that paid off is profit sitting in a wasting asset |
+| None of the above | Hold, and record which checks ran | A quiet cycle should still show its reasoning |
+
+Each management ticket is capped: the agent will not pay more than its roll budget, and
+it will not re-arm a floor that leaves more downside than the per-order limit allows.
 
 ## Safety
 
@@ -38,11 +56,12 @@ Paste **paper** keys from the
 
 ```bash
 uv run python scripts/smoke_paper.py          # verify keys: clock + account
+uv run python scripts/broker_report.py        # SDK vs CLI vs agent, side by side
 uv run python scripts/run_agent.py            # one agent cycle (dry run)
 uv run python scripts/run_agent.py --execute  # send the ticket to paper
 uv run python scripts/run_agent.py --loop --execute --interval 900
 uv run streamlit run app/streamlit_app.py     # judge-facing demo
-uv run pytest                                 # tests, no keys needed
+uv run pytest                                 # tests, no keys or network needed
 ```
 
 `--loop` repeats the cycle during the session. Cycle 1 buys SPY; cycle 2 opens the
@@ -73,32 +92,25 @@ soft-veto, but `review_proposal` decides what reaches the broker.
 
 ## Alpaca MCP and CLI
 
-The event requires the Trading API plus the **MCP server and/or CLI**. The product uses
-`alpaca-py`; MCP and CLI are used for development and inspection.
+Full detail in [docs/mcp-and-cli.md](docs/mcp-and-cli.md). In short, each tool does the
+job it is best at:
 
-**MCP** ([alpacahq/alpaca-mcp-server](https://github.com/alpacahq/alpaca-mcp-server)):
-
-```json
-{
-  "mcpServers": {
-    "alpaca": {
-      "command": "uvx",
-      "args": ["alpaca-mcp-server"],
-      "env": {
-        "ALPACA_API_KEY": "your_paper_key",
-        "ALPACA_SECRET_KEY": "your_paper_secret"
-      }
-    }
-  }
-}
-```
-
-**CLI** ([alpacahq/cli](https://github.com/alpacahq/cli)), paper by default:
+- **Trading API** (`alpaca-py`) is the only thing that places orders.
+- **CLI** ([alpacahq/cli](https://github.com/alpacahq/cli)) is an *independent* read of
+  the same account, run before every ticket. If the CLI and the SDK disagree about the
+  account or the open positions, the cycle stops rather than trade a stale book. If the
+  binary is not installed the check reports so and the agent continues.
+- **MCP** ([alpacahq/alpaca-mcp-server](https://github.com/alpacahq/alpaca-mcp-server))
+  gives an LLM client a window on the account for research and supervision — reading
+  chains, greeks and fills. It never routes an order, because every order must pass
+  `review_proposal` first.
 
 ```bash
-go install github.com/alpacahq/cli/cmd/alpaca@latest
-alpaca profile login
-alpaca data option chain --underlying-symbol SPY
+# CLI, no Go toolchain needed on Windows: grab the release binary, then
+alpaca profile login --api-key --paper
+uv run python scripts/broker_report.py   # SDK and CLI, side by side
+
+# MCP: copy mcp.example.json to .cursor/mcp.json and paste paper keys
 ```
 
 ## Configuration

@@ -3,6 +3,7 @@
 Notas en español para ti; el código y el README están en inglés (los ven los jueces).
 
 ## Competición
+- [**Qué tienes que hacer tú**](hackathon/instrucciones-operador.md) — kickoff, cuenta de entrega, loop, demo, formulario
 - [Overview](hackathon/overview.md) — dónde te estás metiendo
 - [Reglas y criterios](hackathon/reglas-y-criterios.md) — requisitos duros y puntuación
 - [Entrega](hackathon/entrega.md) — checklist de submission

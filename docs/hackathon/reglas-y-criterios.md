@@ -1,48 +1,89 @@
 # Reglas y criterios
 
-La landing de lablab está casi vacía hasta el kickoff. Esto mezcla **lo publicado** con
-**prácticas estándar de lablab**. El 28 ago a las 15:00 UTC llega el brief oficial:
-actualiza esta nota ese día.
+Actualizado con el **kickoff** (28 ago 2026). Si Discord o la landing lo contradicen,
+gana lo escrito ahí.
 
-## Requisitos duros
+## Requisitos duros (main challenge — obligatorio)
 
-1. **18+**, online, equipos de **1 a 6** personas.
-2. Usar la **Alpaca Trading API**.
-3. Usar **MCP server o CLI** de Alpaca.
-4. La estrategia **incorpora opciones**.
-5. Entrega con **cuenta paper nueva y dedicada**.
-6. Todo en **paper**. Cero dinero real.
+1. Equipos de **1 a 6**. Registrarse en lablab y **crear o unirse a un equipo**.
+2. Agentes **autónomos** (y apps de trading) sobre Alpaca.
+3. Usar la **Alpaca Trading API** (obligatorio).
+4. Usar **MCP server o CLI** de Alpaca (uno de los dos basta; en el stream el MCP se
+   presentó como el núcleo del evento — conviene que se *vea* en demo/vídeo).
+5. Toda estrategia **incorpora options trading**.
+6. Desarrollar y probar en **paper trading**. Cero capital real.
 
-## Fechas (UTC)
+El main challenge se llama **Options Alpha Agents**: agentes de IA pensados para
+**generar P&L** en la plataforma de Alpaca. La solución tiene que mostrar una
+estrategia **clara y testeable**, y cómo el agente:
 
-| Momento | Cuándo |
-| --- | --- |
-| Kickoff + cierre de inscripción | **vie 28 ago 2026, 15:00** |
-| Cierre de submissions | **vie 4 sep 2026, 15:00** |
+- identifica oportunidades,
+- decide en el mercado,
+- **gestiona la posición**,
+- y rinde **a lo largo de toda la competición** (no un trade único de demo).
 
-## Criterios (confirmar en kickoff)
+Enfoques que citaron: options, trading agents, *portfolio income*, u otros que
+Alpaca soporte.
 
-- **P&L performance** — equity de la cuenta paper durante el evento.
-- **Technology implementation** — API, agente, opciones, MCP/CLI, calidad del repo.
-- **Creativity & originality** — el overlay de cobertura frente al enésimo bot de momentum.
-- **Presentation & execution** — vídeo, slides, demo comprensible.
+## Extra challenge (opcional): Built in Public
 
-## Cómo jugarlos
+Compartir el progreso en **X y LinkedIn**, etiquetando los perfiles de Alpaca y
+lablab (handles en la landing del evento). En el formulario de entrega caben
+**hasta 5 enlaces** a posts.
 
-**P&L:** una semana es ruido. Empieza a operar el 28 con límites estrictos. El repo ya
-trae circuit breaker (`MAX_DAILY_LOSS_USD`, `MIN_EQUITY_USD`) y tope por orden.
+No sustituye al main challenge. Premios aparte: **$500** para cada uno de los dos
+equipos ganadores de social, más **un mes de Algo Trader Plus** por miembro del
+equipo ganador.
 
-**Tech:** la estrategia propone, el LLM explica (veto suave), `risk/` decide. Órdenes
-de opciones reales, collar multi-leg con quotes y delta. El journal JSONL da trazabilidad.
+## Fechas
 
-**Creatividad:** riesgo definido y hedging explicable. Nada de short desnudo.
+| Momento | Hora oficial | Tu reloj (UTC−4) |
+| --- | --- | --- |
+| Kickoff | vie 28 ago (stream) | ya ocurrió |
+| Q&A Discord | 18:00 CET el día del kickoff | ya ocurrió |
+| Build | 28 ago – 4 sep | toda la semana |
+| **Cierre de submissions** | vie **4 sep, 17:00 CET** | vie **4 sep ~11:00** (si CET = CEST, UTC+2) |
 
-**Presentación:** vídeo grabado el 3 sep. El 4 es buffer.
+Cuando el countdown llega a cero, **el formulario se desactiva**. Empezar a
+rellenarlo días antes.
 
-## Qué escuchar en el kickoff
+## Criterios de los jueces (orden en el stream)
 
-- ¿Sigue habiendo un solo track?
-- ¿Piden herramientas concretas, posts en redes o informes de sesiones de IA?
-- ¿Cómo se vincula la cuenta paper para medir P&L?
-- Rúbrica numérica y desglose de premios.
-- Hosting permitido para el demo.
+Tony (Alpaca): ideas creativas, **gestión de riesgo**, ejecución técnica, **P&L**.
+
+Joanna, en este orden:
+
+1. **P&L performance** — «first and foremost».
+2. **Technology implementation** — API, MCP y CLI.
+3. **Creativity & originality**.
+4. **Presentation and execution**.
+
+No dieron pesos numéricos.
+
+## Premios (main)
+
+Bolsa **$6,000**. Top 3 overall: **$2,500 / $1,500 / $1,000**.
+
+## Cómo jugarlos con *este* repo
+
+**P&L:** el collar tiene que estar **vivo en paper toda la semana**, no solo en un
+screenshot. Loop desatendido (`--loop --execute`) + journal. Una semana es ruido;
+no all-in.
+
+**Tech:** el producto opera con `alpaca-py` (Trading API). MCP y/o CLI tienen que
+aparecer en README, vídeo y, si puedes, un uso real (inspección de cuenta/cadena).
+Sin eso, el criterio 2 se cae aunque el collar sea correcto.
+
+**Creatividad:** overlay de cobertura con riesgo definido (put + call cubierto), no
+otro bot de momentum. Encaja con «portfolio income» / gestión de posición.
+
+**Presentación:** vídeo ≤5 min de *lo que construiste*, GitHub con demo, textos del
+formulario. Que se vea el ciclo: oportunidad → decisión → riesgo → orden o hold.
+
+## Lo que el stream *no* cerró
+
+- Cómo **vinculan** el número de cuenta paper al P&L (preguntar en Discord
+  `#…hackathon` con tag `mentors` si no está en la landing).
+- Rúbrica con porcentajes.
+- Si el formulario lablab sigue pidiendo slides/cover además del vídeo (la guía
+  genérica sí; Joanna citó descripción + vídeo + GitHub/demo).

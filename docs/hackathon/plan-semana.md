@@ -2,6 +2,9 @@
 
 El esqueleto ya está. La estrategia ganadora se afina **después** del kickoff.
 
+Checklist de operador (qué abrir, cuándo ejecutar, qué entregar):
+[instrucciones-operador](instrucciones-operador.md).
+
 ## Punto de restauración
 
 Tag git **`restore-collar-playbook`**: el collar agresivo ya construido, **antes** de
