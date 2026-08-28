@@ -10,17 +10,18 @@ Los jueces **no ven Cursor**. Ven: cuenta paper (P&L de la semana) + repo + demo
 
 ---
 
-## Estado ahora (jueves 27)
+## Estado ahora (viernes 28, noche)
 
 | Cosa | Estado |
 | --- | --- |
-| Código / tests | Listos. El playbook es: sembrar 100 SPY → 1 collar → **hold**. |
-| Agente en bucle | **No está corriendo.** Hace falta una ventana de terminal abierta. |
-| Cuenta Alpaca actual | De **desarrollo**. Ya tiene 100 SPY + collar. Sirve para probar, **no** para puntuar. |
-| Reloj de P&L del evento | Empieza el viernes, en una **cuenta paper nueva y vacía**. |
+| Código / tests | Listos. 91 tests y ruff en verde, sin red ni claves. |
+| Estrategia | Collar financiado + **gestión activa** (rolar call ITM, rolar por vencimiento, monetizar put). |
+| Cuenta de entrega | `PA3GMY396XY9`, $100k, **opciones nivel 3**, libro vacío. Keys ya en `.env`. |
+| GitHub | Público: https://github.com/Ander-IbBi/alpaca-options-agent — CI en verde. |
+| CLI de Alpaca | Instalada en `~/.alpaca-cli` y con sesión paper iniciada. |
+| Agente en bucle | **No está corriendo**, y no puede: el mercado abre el **lunes 31 a las 9:30**. |
 
-No dejes `--loop --execute` contra las keys de desarrollo: esas operaciones no cuentan
-y ensucian el libro.
+Lo único que falta para generar P&L es arrancar el lunes.
 
 ---
 
@@ -56,77 +57,43 @@ Track a elegir: **Options Alpha Agents**.
 
 ---
 
-## Hoy (antes del kickoff)
+## Este fin de semana (mercado cerrado)
 
-Haz esto aunque el código ya funcione.
+Nada de trading: la bolsa abre el lunes. Lo que sí puedes cerrar ya:
 
 ### 1. lablab
 
 - [ ] Equipo creado en el dashboard **aunque vayas solo** (1 a 6 personas).
-- [ ] Discord de lablab abierto y cuenta vinculada si el formulario lo pide.
-- [ ] Track: Options Alpha Agents.
+- [ ] Discord de lablab, canal del hackathon.
+- [ ] Empezar a rellenar el formulario de entrega (se guarda; no esperes al día 4).
 
-### 2. Comprobar que no se te ha escapado nada de Alpaca (cuenta de desarrollo)
+### 2. Built in Public (opcional, premio aparte de $500)
 
-- [ ] En el dashboard paper: **opciones habilitadas** (nivel de trading; aquí era 3).
-- [ ] `uv run python scripts/smoke_paper.py` imprime `Smoke test OK (paper)`.
+Posts en **X y LinkedIn** etiquetando a Alpaca y lablab. Caben **5 enlaces** en el
+formulario. Ideas que ya puedes contar: el repo público, por qué un collar en vez de
+un bot direccional, y la verificación cruzada SDK/CLI.
 
-No hace falta operar más en esta cuenta.
+### 3. Comprobación rápida (opcional)
 
-### 3. Qué escuchar en el kickoff (apunta literal)
+```powershell
+uv run python scripts/broker_report.py
+```
 
-No improvises el viernes: lleva estas preguntas y escríbelas en
-[reglas-y-criterios](reglas-y-criterios.md) en cuanto acabe el stream.
-
-- ¿Sigue habiendo **un solo track** y se llama igual?
-- ¿Cómo **vinculan** la cuenta paper para medir P&L? (número de cuenta, screenshot, form…)
-- ¿La cuenta de entrega tiene que ser **nueva / reseteada / otro login**?
-- ¿Exigen **MCP y CLI**, o basta con uno de los dos? (el repo ya documenta los dos)
-- ¿Piden posts en redes, logs de sesiones de IA, o un informe extra?
-- ¿Rúbrica numérica (cuánto vale P&L vs demo vs código)?
-- ¿El demo tiene que estar **desplegado** (URL pública) o vale localhost + vídeo?
-- Hosting permitido (Streamlit Community Cloud, Hugging Face, etc.).
-- Premios y desempates.
+Enseña la cuenta vista por el SDK y por la CLI, y un ciclo en seco.
 
 ---
 
-## Viernes 28 — día 1 del evento
+## Lunes 31 — arranca el P&L
 
-Orden fijo. No adelantes el `--execute` de entrega **antes** del kickoff.
+El mercado abre a las **9:30** (tu hora). El agente ya sabe qué hacer.
 
-### A. Ver el kickoff (11:00 tu hora)
-
-Twitch. Toma notas. Actualiza `docs/hackathon/reglas-y-criterios.md`.
-
-### B. Cuenta paper de **entrega**
-
-Objetivo: libro **vacío** y keys **solo** de esa cuenta en `.env`.
-
-1. Sigue lo que diga el brief (nueva cuenta, reset paper, u otro usuario).
-2. En Alpaca: confirma otra vez **paper** (no live) y **opciones ON**.
-3. Crea API keys **paper**. Pégalas en `.env` (sustituyen las de desarrollo).
-4. Comprueba que **no** has puesto `ALPACA_LIVE_TRADE=true`.
-5. Deja `DRY_RUN=true` hasta el smoke.
-
-En PowerShell, desde la carpeta del repo:
+### A. Sembrar y collarizar
 
 ```powershell
-uv run python scripts/smoke_paper.py
-```
-
-Tiene que salir `paper=True` y el **número de cuenta nuevo**. Si ves el de desarrollo,
-las keys no se han cambiado.
-
-### C. Primeras órdenes (empieza el P&L)
-
-Cuando el smoke esté bien y el mercado de USA esté **abierto** (aprox. 9:30–16:00
-Nueva York):
-
-```powershell
-# Un ciclo: debería comprar 100 SPY
+# Ciclo 1: compra 100 SPY
 uv run python scripts/run_agent.py --execute
 
-# Espera a que SPY esté en posiciones (dashboard). Luego el collar:
+# Espera al fill (mira el dashboard). Ciclo 2: abre el collar
 uv run python scripts/run_agent.py --execute
 ```
 
@@ -165,18 +132,22 @@ ciclo sigue igual.
 
 ---
 
-## Sábado 29 – miércoles 2: a qué estar atento
+## Lunes 31 – miércoles 2: a qué estar atento
 
-No rediseñes la estrategia a mitad de semana. El agente, si el collar está on, **hold**.
+No rediseñes la estrategia a mitad de semana. El agente ya gestiona solo.
 
 Mira, no toques:
 
 | Señal | Qué significa | Qué haces |
 | --- | --- | --- |
-| Journal: «overlay already on» | Correcto | Nada |
-| Journal: «Open overlay orders… waiting» | Hay un limit sin fill | Nada; si al cierre se cancela (day), el siguiente ciclo reintenta |
-| Journal: «Risk layer blocked» | El código te salvó | No fuerces la orden a mano |
-| Equity por debajo de ~80k o pérdida diaria > 1500 | Circuit breaker | El agente deja de mandar. No «recuperes» a mano con más riesgo |
+| «overlay already on … Hold: short 790c safe; …» | Correcto: ha mirado y decide esperar | Nada |
+| «Roll the short call up» | SPY subió por encima del call; recupera recorrido | Nada, es lo que debe hacer |
+| «Roll the collar out» | Se acercaba el vencimiento | Nada |
+| «Harvest the hedge» | El put dobló en una caída; realiza el beneficio | Nada |
+| «Broker views disagree… stale book» | SDK y CLI no coinciden | Mira el dashboard; suele ser un fill a medias. Se resuelve solo |
+| «Open overlay orders… waiting» | Hay un limit sin fill | Nada; el limit es day, el siguiente ciclo reintenta |
+| «Risk layer blocked» | El código te salvó | No fuerces la orden a mano |
+| Equity < ~80k o pérdida diaria > 1500 | Circuit breaker | El agente deja de mandar. No «recuperes» a mano con más riesgo |
 | Posición a medias (solo put o solo call) | El agente espera a propósito | No vendas otro call sobre las mismas 100 acciones |
 | Smoke o ciclo hablan de **live** | Stop inmediato | Keys mal; vuelve a paper |
 | `.env` en un commit | Stop | No lo subas nunca. Solo `.env.example` vacío |
@@ -250,6 +221,7 @@ Desde `C:\Users\User\Projects\alpaca-options-agent`:
 
 ```powershell
 uv run python scripts/smoke_paper.py
+uv run python scripts/broker_report.py
 uv run python scripts/run_agent.py
 uv run python scripts/run_agent.py --execute
 uv run python scripts/run_agent.py --loop --execute --interval 900
@@ -269,5 +241,7 @@ Sin `--execute`, **no se manda nada** al broker.
 | ¿Qué es el evento? | [overview](overview.md) |
 | ¿Qué puntúan? | [reglas-y-criterios](reglas-y-criterios.md) |
 | ¿Campos del formulario? | [entrega](entrega.md) |
+| ¿Cómo grabo el vídeo? | [video-guion](video-guion.md) |
 | ¿Calendario corto? | [plan-semana](plan-semana.md) |
 | ¿Qué carpeta toca? | [Guía del repo](../guia-del-repo.md) |
+| ¿Qué pinta el MCP y qué la CLI? | [mcp-and-cli](../mcp-and-cli.md) |
