@@ -1,0 +1,14 @@
+{
+  "$comment": "Alpaca MCP server for Cursor / Claude Desktop / VS Code. Copy to .cursor/mcp.json (gitignored) and paste PAPER keys. Never put live keys here.",
+  "mcpServers": {
+    "alpaca": {
+      "command": "uvx",
+      "args": ["alpaca-mcp-server"],
+      "env": {
+        "ALPACA_API_KEY": "your_paper_key",
+        "ALPACA_SECRET_KEY": "your_paper_secret",
+        "ALPACA_PAPER_TRADE": "true"
+      }
+    }
+  }
+}
