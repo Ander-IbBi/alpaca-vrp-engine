@@ -43,13 +43,13 @@ def build_order_request(proposal: ProposedTrade) -> MarketOrderRequest | LimitOr
         leg = proposal.legs[0]
         return MarketOrderRequest(
             symbol=leg.symbol,
-            qty=proposal.qty,
+            qty=int(proposal.qty),
             side=_side(leg),
             time_in_force=TimeInForce.DAY,
         )
 
     # Options only support day orders on Alpaca.
-    common: dict[str, Any] = {"qty": proposal.qty, "time_in_force": TimeInForce.DAY}
+    common: dict[str, Any] = {"qty": int(proposal.qty), "time_in_force": TimeInForce.DAY}
 
     if proposal.is_multi_leg:
         common["order_class"] = OrderClass.MLEG

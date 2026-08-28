@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from options_agent.alpaca.options import (
     OptionCandidate,
     candidates_from_snapshots,
+    fetch_quoted_chain,
     parse_occ_symbol,
 )
 
@@ -60,3 +61,39 @@ def test_spread_fraction() -> None:
         ask=6.0,
     )
     assert candidate.spread_fraction == 0.4
+
+
+def test_fetch_quoted_chain_widens_when_the_window_is_empty() -> None:
+    snapshot = SimpleNamespace(
+        latest_quote=SimpleNamespace(bid_price=3.2, ask_price=3.3),
+        greeks=SimpleNamespace(delta=-0.20),
+        implied_volatility=0.15,
+    )
+
+    class FakeData:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get_option_chain(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                return {}
+            return {"SPY260918P00750000": snapshot}
+
+    client = SimpleNamespace(option_data=FakeData())
+    found = fetch_quoted_chain(client, "SPY", today=date(2026, 8, 27))  # type: ignore[arg-type]
+    assert len(found) == 1
+    assert client.option_data.calls == 2
+
+
+def test_fetch_quoted_chain_survives_a_null_payload() -> None:
+    class FakeData:
+        def get_option_chain(self, request):
+            return None
+
+    found = fetch_quoted_chain(
+        SimpleNamespace(option_data=FakeData()),  # type: ignore[arg-type]
+        "SPY",
+        today=date(2026, 8, 27),
+    )
+    assert found == []

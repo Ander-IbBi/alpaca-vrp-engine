@@ -71,13 +71,30 @@ def run_agent() -> int:
     return 0
 
 
+def _sleep_seconds(agent: OverlayAgent, interval: int) -> int:
+    """When the session is shut, poll less often so overnight --loop is quiet."""
+    try:
+        clock = agent.client.clock()
+    except Exception:  # noqa: BLE001
+        return interval
+    if clock.is_open:
+        return interval
+    return min(max(interval * 4, 1800), 3600)
+
+
 def _run_loop(agent: OverlayAgent, *, execute: bool | None, interval: int) -> int:
-    print(f"Looping every {interval}s. Ctrl+C to stop. execute={bool(execute)}")
+    print(
+        f"Looping every {interval}s while the market is open. "
+        f"Ctrl+C to stop. execute={bool(execute)}"
+    )
     try:
         while True:
-            cycle = agent.run_once(execute=execute)
-            print(json.dumps(cycle.model_dump(mode="json", exclude_none=True), indent=2))
-            time.sleep(interval)
+            try:
+                cycle = agent.run_once(execute=execute)
+                print(json.dumps(cycle.model_dump(mode="json", exclude_none=True), indent=2))
+            except Exception as exc:  # noqa: BLE001
+                print(f"ERROR: {type(exc).__name__}: {exc}")
+            time.sleep(_sleep_seconds(agent, interval))
     except KeyboardInterrupt:
         print("Stopped.")
         return 0

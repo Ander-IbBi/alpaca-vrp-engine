@@ -7,8 +7,9 @@ tested without hitting the network or depending on alpaca-py models.
 from __future__ import annotations
 
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, NamedTuple
+from zoneinfo import ZoneInfo
 
 from alpaca.data.requests import OptionChainRequest
 from alpaca.trading.enums import AssetStatus, ContractType
@@ -187,8 +188,7 @@ def fetch_contracts(
 def fetch_chain_quotes(client: PaperAlpaca, underlying: str) -> dict[str, dict]:
     """Raw chain snapshot (quotes, greeks, IV) keyed by OCC symbol."""
     request = OptionChainRequest(underlying_symbol=underlying.upper())
-    chain = client.option_data.get_option_chain(request)
-    return dict(chain)
+    return _as_snapshot_map(client.option_data.get_option_chain(request))
 
 
 def fetch_quoted_chain(
@@ -204,11 +204,36 @@ def fetch_quoted_chain(
     This is what the live overlay uses: without quotes the risk layer would reject
     every ticket for a missing cost estimate.
     """
-    as_of = today or date.today()
+    as_of = today or datetime.now(ZoneInfo("America/New_York")).date()
     request = OptionChainRequest(
         underlying_symbol=underlying.upper(),
         expiration_date_gte=as_of + timedelta(days=min_dte),
         expiration_date_lte=as_of + timedelta(days=max_dte),
     )
-    chain = client.option_data.get_option_chain(request)
-    return candidates_from_snapshots(dict(chain), underlying=underlying)
+    candidates = candidates_from_snapshots(
+        _as_snapshot_map(client.option_data.get_option_chain(request)),
+        underlying=underlying,
+    )
+    if candidates:
+        return candidates
+    # Empty window (holiday week, UTC/ET date skew): widen once rather than skip the overlay.
+    wide = OptionChainRequest(
+        underlying_symbol=underlying.upper(),
+        expiration_date_gte=as_of + timedelta(days=max(min_dte - 7, 7)),
+        expiration_date_lte=as_of + timedelta(days=max_dte + 15),
+    )
+    return candidates_from_snapshots(
+        _as_snapshot_map(client.option_data.get_option_chain(wide)),
+        underlying=underlying,
+    )
+
+
+def _as_snapshot_map(chain: Any) -> dict[str, Any]:
+    if not chain:
+        return {}
+    if isinstance(chain, dict):
+        return chain
+    try:
+        return dict(chain)
+    except (TypeError, ValueError):
+        return {}

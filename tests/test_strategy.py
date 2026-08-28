@@ -1,4 +1,6 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 from options_agent.alpaca.options import OptionCandidate
 from options_agent.strategy.base import StrategyContext
@@ -6,7 +8,11 @@ from options_agent.strategy.overlay import (
     AggressiveCollarOverlay,
     collar_cash_and_max_loss,
     contracts_for_shares,
+    free_covering_shares,
+    is_option_position,
+    market_date,
     net_limit_price,
+    order_touches_watchlist,
     select_collar,
     select_protective_put,
 )
@@ -130,6 +136,20 @@ def test_collar_max_loss_is_the_gap_plus_net_debit() -> None:
 def test_net_limit_price_rounds_to_cents() -> None:
     assert net_limit_price(3.25, 1.81) == 1.44
     assert net_limit_price(2.0, 2.0) == 0.01
+    assert net_limit_price(1.50, 1.80) == -0.30
+
+
+def test_select_collar_tries_the_next_put_when_expiry_has_no_call() -> None:
+    chain = [
+        _opt("put", 750, days=30, delta=-0.20, bid=3.2, ask=3.3),
+        _opt("put", 740, days=35, delta=-0.22, bid=2.1, ask=2.2),
+        _opt("call", 785, days=35, delta=0.20, bid=2.9, ask=3.0),
+    ]
+    chosen = select_collar(chain, spot=770.0, today=TODAY)
+    assert chosen is not None
+    assert chosen.put.strike == 740
+    assert chosen.call.strike == 785
+    assert chosen.put.expiration == chosen.call.expiration
 
 
 def test_overlay_seeds_spy_when_the_book_is_empty() -> None:
@@ -233,4 +253,121 @@ def test_overlay_skips_when_already_collared() -> None:
     )
     proposal = strategy.propose(context)
     assert proposal.skip
-    assert "already collared" in proposal.rationale
+    assert "overlay already on" in proposal.rationale
+
+
+def test_overlay_holds_when_only_the_put_is_filled() -> None:
+    strategy = AggressiveCollarOverlay(chain_provider=lambda _: [])
+    context = StrategyContext(
+        today=TODAY,
+        market_open=True,
+        equity=100_000,
+        cash=20_000,
+        underlyings=["SPY"],
+        equity_positions=[FakePosition("SPY", 100, 770.0)],
+        option_positions=[FakePosition(_occ("put", 750), 1, option=True)],
+        spot_prices={"SPY": 770.0},
+    )
+    proposal = strategy.propose(context)
+    assert proposal.skip
+    assert "overlay already on" in proposal.rationale
+
+
+def test_overlay_holds_when_only_the_short_call_is_filled() -> None:
+    strategy = AggressiveCollarOverlay(chain_provider=lambda _: [])
+    context = StrategyContext(
+        today=TODAY,
+        market_open=True,
+        equity=100_000,
+        cash=20_000,
+        underlyings=["SPY"],
+        equity_positions=[FakePosition("SPY", 100, 770.0)],
+        option_positions=[FakePosition(_occ("call", 790), -1, option=True)],
+        spot_prices={"SPY": 770.0},
+    )
+    proposal = strategy.propose(context)
+    assert proposal.skip
+
+
+def test_drops_a_put_whose_floor_exceeds_the_loss_cap() -> None:
+    chain = [
+        _opt("put", 700, delta=-0.20, bid=1.0, ask=1.0),
+        _opt("put", 760, delta=-0.28, bid=4.0, ask=4.0),
+        _opt("call", 790, delta=0.20, bid=1.8, ask=1.8),
+    ]
+    strategy = AggressiveCollarOverlay(
+        chain_provider=lambda _: chain,
+        max_order_notional_usd=2_500,
+    )
+    context = StrategyContext(
+        today=TODAY,
+        market_open=True,
+        equity=100_000,
+        cash=20_000,
+        underlyings=["SPY"],
+        equity_positions=[FakePosition("SPY", 100, 770.0)],
+        spot_prices={"SPY": 770.0},
+    )
+    proposal = strategy.propose(context)
+    assert not proposal.skip
+    assert proposal.legs[0].symbol.endswith("P00760000")
+    assert proposal.max_loss_usd is not None
+    assert proposal.max_loss_usd <= 2_500
+
+
+def test_is_option_position_reads_enum_value() -> None:
+    enum_like = SimpleNamespace(asset_class=SimpleNamespace(value="us_option"), symbol="X")
+    assert is_option_position(enum_like)
+    stock = SimpleNamespace(asset_class=SimpleNamespace(value="us_equity"), symbol="SPY")
+    assert not is_option_position(stock)
+
+
+def test_is_option_position_falls_back_to_occ_symbol() -> None:
+    # alpaca-py str(enum) is "AssetClass.US_OPTION", which is not the token "us_option".
+    odd = SimpleNamespace(asset_class="AssetClass.US_OPTION", symbol=_occ("put", 750))
+    assert is_option_position(odd)
+
+
+def test_free_covering_shares_nets_out_existing_short_calls() -> None:
+    options = [FakePosition(_occ("call", 790), -1, option=True)]
+    assert free_covering_shares(200, options, "SPY") == 100
+    assert free_covering_shares(100, options, "SPY") == 0
+
+
+def test_market_date_is_new_york_not_utc() -> None:
+    # 02:30 UTC on 28 Aug is still 22:30 ET on the 27th.
+    late_utc = datetime(2026, 8, 28, 2, 30, tzinfo=ZoneInfo("UTC"))
+    assert market_date(late_utc) == date(2026, 8, 27)
+
+
+def test_order_touches_watchlist_reads_mleg_legs() -> None:
+    order = SimpleNamespace(
+        symbol="",
+        legs=[SimpleNamespace(symbol=_occ("put", 750))],
+    )
+    assert order_touches_watchlist(order, ["SPY"])
+    assert not order_touches_watchlist(order, ["QQQ"])
+
+
+def test_order_touches_watchlist_sees_the_seed_ticker() -> None:
+    assert order_touches_watchlist(SimpleNamespace(symbol="SPY", legs=None), ["SPY"])
+    assert not order_touches_watchlist(SimpleNamespace(symbol="AAPL", legs=[]), ["SPY"])
+
+
+def test_overlay_skips_when_the_chain_fetch_fails() -> None:
+    def boom(_symbol: str):
+        raise RuntimeError("option snapshot timeout")
+
+    strategy = AggressiveCollarOverlay(chain_provider=boom)
+    context = StrategyContext(
+        today=TODAY,
+        market_open=True,
+        equity=100_000,
+        cash=20_000,
+        underlyings=["SPY"],
+        equity_positions=[FakePosition("SPY", 100, 770.0)],
+        spot_prices={"SPY": 770.0},
+    )
+    proposal = strategy.propose(context)
+    assert proposal.skip
+    assert "chain fetch failed" in proposal.rationale.lower()

@@ -51,6 +51,19 @@ def test_multi_leg_limit_order_uses_net_price() -> None:
     assert len(payload["legs"]) == 2
 
 
+def test_credit_collar_keeps_a_negative_net_limit() -> None:
+    proposal = ProposedTrade(
+        qty=1,
+        limit_price=-0.25,
+        legs=[
+            ProposedLeg(symbol="SPY260918P00740000", side="buy"),
+            ProposedLeg(symbol="SPY260918C00785000", side="sell"),
+        ],
+    )
+    payload = build_order_request(proposal).model_dump(exclude_none=True, mode="json")
+    assert payload["limit_price"] == -0.25
+
+
 def test_equity_seed_builds_a_stock_market_order() -> None:
     proposal = ProposedTrade(
         qty=100,
