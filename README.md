@@ -85,7 +85,7 @@ market data + account  ->  strategy  ->  risk  ->  LLM review  ->  orders  ->  A
 | `src/options_agent/agent/` | Cycle loop, LLM tool surface, optional advisor |
 | `src/options_agent/journal.py` | Append-only JSONL audit trail |
 | `app/streamlit_app.py` | Demo UI |
-| `docs/` | Competition notes and repo guide (Spanish) |
+| `docs/` | Competition notes and repo guide |
 
 The risk layer is deliberately separate from the strategy: the LLM may comment or
 soft-veto, but `review_proposal` decides what reaches the broker.

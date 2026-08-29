@@ -1,20 +1,21 @@
-# Documentación
+# Documentation
 
-Notas en español para ti; el código y el README están en inglés (los ven los jueces).
+Competition notes and repo guides. Code and the root README are in English for
+judges.
 
-## Competición
-- [**Qué tienes que hacer tú**](hackathon/instrucciones-operador.md) — kickoff, cuenta de entrega, loop, demo, formulario
-- [Overview](hackathon/overview.md) — dónde te estás metiendo
-- [Reglas y criterios](hackathon/reglas-y-criterios.md) — requisitos duros y puntuación
-- [Entrega](hackathon/entrega.md) — checklist de submission
-- [Guion del vídeo](hackathon/video-guion.md) — 5 min cronometrados + prompt para NotebookLM
-- [Plan de la semana](hackathon/plan-semana.md) — 26 ago – 4 sep
+## Competition
+- [**What you need to do**](hackathon/operator-instructions.md) — kickoff, submission account, loop, demo, form
+- [Overview](hackathon/overview.md) — what you are walking into
+- [Rules and criteria](hackathon/rules-and-criteria.md) — hard requirements and scoring
+- [Submission](hackathon/submission.md) — submission checklist
+- [Video / NotebookLM](hackathon/video-script.md) — sources + prompt to generate the pitch in NotebookLM
+- [Week plan](hackathon/week-plan.md) — 26 Aug – 4 Sep
 
-## Proyecto
-- [Guía del repo](guia-del-repo.md) — qué hace cada carpeta y por qué
-- [MCP y CLI](mcp-and-cli.md) — qué papel juega cada herramienta de Alpaca
-- [Fuentes](fuentes.md) — enlaces y material
-- [Explicaciones](explicaciones/hackathon-alpaca-overview.md) — texto de estudio
+## Project
+- [Repo guide](repo-guide.md) — what each folder does and why
+- [MCP and CLI](mcp-and-cli.md) — what each Alpaca tool is for
+- [Sources](sources.md) — links and material
+- [Explanations](explanations/hackathon-alpaca-overview.md) — study notes
 
-El vault de Obsidian `C:\Users\User\Vault\deep-hedging` sigue siendo para teoría
-de deep hedging; este repo es solo el producto de la hackathon.
+The Obsidian vault `C:\Users\User\Vault\deep-hedging` remains for deep-hedging theory;
+this repo is only the hackathon product.

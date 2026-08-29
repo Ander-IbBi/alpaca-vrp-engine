@@ -23,6 +23,6 @@ none may be added.
 - `uv run ruff check .`
 
 ## Docs
-- Competition notes live in `docs/`, in Spanish. Update
-  `docs/hackathon/reglas-y-criterios.md` after the kickoff brief.
+- Competition notes live in `docs/`, in English. Update
+  `docs/hackathon/rules-and-criteria.md` after the kickoff brief.
 - Code-facing docs (README, docstrings) stay in English.

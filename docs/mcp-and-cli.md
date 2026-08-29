@@ -1,7 +1,5 @@
 # Alpaca MCP and CLI in this project
 
-> Nota en español al final. This page is in English because judges read it.
-
 The hackathon requires the Alpaca **Trading API** plus the **MCP server and/or the
 CLI**. This project uses all three, each where it actually belongs.
 
@@ -68,9 +66,3 @@ project refuses to have. The model explains and may soft-veto; it never routes a
 
 The tool surface the agent exposes to its own LLM is read-only by construction:
 [tools.py](../src/options_agent/agent/tools.py).
-
----
-
-**Resumen (es):** la API de trading ejecuta, la CLI hace de verificación independiente
-antes de cada orden (y si no está instalada, el ciclo sigue), y el MCP es la ventana del
-LLM a la cuenta para investigar y supervisar, nunca para ejecutar.

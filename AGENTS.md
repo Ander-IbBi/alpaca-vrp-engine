@@ -1,42 +1,41 @@
-# alpaca-options-agent — Contexto para agentes de IA
+# alpaca-options-agent — context for AI agents
 
-> Fuente de verdad del proyecto. Cursor la lee automáticamente. Mantenla corta.
+> Source of truth for the project. Cursor reads this automatically. Keep it short.
 
-## Qué es
-Agente de overlay de cobertura con **opciones** (collar agresivo sobre SPY) para el
+## What it is
+A hedge-overlay agent with **options** (aggressive collar on SPY) for the
 [Alpaca AI Trading Agents Hackathon](https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon)
-(28 ago – 4 sep 2026, track **Options Alpha Agents**). Opera **solo en Alpaca paper**.
-El entregable son código público + demo Streamlit + vídeo, no el chat del IDE.
+(28 Aug – 4 Sep 2026, track **Options Alpha Agents**). It runs **only on Alpaca paper**.
+The deliverable is public code + Streamlit demo + video, not the IDE chat.
 
-Este repo es independiente del vault de Obsidian `Vault/deep-hedging` (estudio teórico).
+This repo is independent of the Obsidian vault `Vault/deep-hedging` (theoretical study).
 
 ## Stack
-- Python 3.11+, empaquetado con **uv** (`pyproject.toml`)
-- `alpaca-py` (Trading API, paper-only), Streamlit para el demo
-- LLM opcional (`uv sync --extra llm`) en `agent/llm.py`
-- Alpaca MCP y CLI: exigidos por el evento, documentados en README; no sustituyen `alpaca-py`
+- Python 3.11+, packaged with **uv** (`pyproject.toml`)
+- `alpaca-py` (Trading API, paper-only), Streamlit for the demo
+- Optional LLM (`uv sync --extra llm`) in `agent/llm.py`
+- Alpaca MCP and CLI: required by the event, documented in the README; they do not replace `alpaca-py`
 
-## Estructura
+## Layout
 - `src/options_agent/`
-  - `config.py` — settings + **abort si `ALPACA_LIVE_TRADE=true`**
-  - `alpaca/` — `client.py` (paper), `options.py` (cadena con quotes/greeks), `orders.py` (tickets)
-  - `strategy/` — `base.py` (vocabulario), `overlay.py` (collar agresivo; intercambiable)
-  - `risk/` — `limits.py` (por orden, call cubierto), `account.py` (circuit breaker de cuenta)
-  - `agent/` — `loop.py` (ciclo), `tools.py` (tools del LLM), `llm.py` (explica + veto suave)
-  - `journal.py` — traza JSONL de decisiones
-- `app/streamlit_app.py` — demo para jueces
+  - `config.py` — settings + **abort if `ALPACA_LIVE_TRADE=true`**
+  - `alpaca/` — `client.py` (paper), `options.py` (chain with quotes/greeks), `orders.py` (tickets)
+  - `strategy/` — `base.py` (vocabulary), `overlay.py` (aggressive collar; swappable)
+  - `risk/` — `limits.py` (per order, covered call), `account.py` (account circuit breaker)
+  - `agent/` — `loop.py` (cycle), `tools.py` (LLM tools), `llm.py` (explains + soft veto)
+  - `journal.py` — JSONL decision trail
+- `app/streamlit_app.py` — demo for judges
 - `scripts/` — `smoke_paper.py`, `run_agent.py`
-- `tests/` — riesgo, config, estrategia y órdenes **sin** tocar la red
-- `docs/` — competición y guías (español)
+- `tests/` — risk, config, strategy and orders **without** touching the network
+- `docs/` — competition notes and guides
 
-## Reglas duras
-- **Nunca live.** `TradingClient(..., paper=True)`; no añadir un flag para live.
-- La estrategia propone; el LLM explica (veto suave fail-open); `risk/` decide. No crear caminos que salten el riesgo.
-- Short desnudo de opciones: prohibido. Un call corto del collar exige acciones de cobertura.
-- `DRY_RUN=true` por defecto; ejecutar requiere intención explícita.
+## Hard rules
+- **Never live.** `TradingClient(..., paper=True)`; do not add a live flag.
+- The strategy proposes; the LLM explains (soft veto, fail-open); `risk/` decides. Do not create paths that skip risk.
+- Naked short options: forbidden. A short call in the collar requires covering shares.
+- `DRY_RUN=true` by default; executing requires explicit intent.
 
-## Convenciones
-- Código, comentarios, docstrings, notebooks y README: **inglés**.
-- Notas de `docs/`: español.
-- Markdown en `kebab-case`. Commits: Conventional Commits.
-- Antes de dar algo por bueno: `uv run pytest` y `uv run ruff check .`.
+## Conventions
+- Code, comments, docstrings, notebooks, README and `docs/`: **English**.
+- Markdown in `kebab-case`. Commits: Conventional Commits.
+- Before calling work done: `uv run pytest` and `uv run ruff check .`.

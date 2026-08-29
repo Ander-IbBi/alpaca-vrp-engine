@@ -1,60 +1,60 @@
 # Overview — Alpaca AI Trading Agents Hackathon
 
-> Mapa de la competición. Reglas en [reglas-y-criterios](reglas-y-criterios.md),
-> entrega en [entrega](entrega.md), calendario en [plan-semana](plan-semana.md).
+> Map of the competition. Rules in [rules-and-criteria](rules-and-criteria.md),
+> submission in [submission](submission.md), calendar in [week-plan](week-plan.md).
 
-## Qué es
+## What it is
 
-Hackathon **online** de [lablab.ai](https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon)
-con Alpaca. **28 agosto – 4 septiembre 2026**. Un único track: **Options Alpha Agents**.
-~2600 inscritos.
+An **online** hackathon by [lablab.ai](https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon)
+with Alpaca. **28 August – 4 September 2026**. A single track: **Options Alpha Agents**.
+~2600 registered.
 
-No es un paper académico: es un **agente de IA que opera opciones en paper trading**
-más un **demo** que los jueces puedan abrir y entender en tres minutos.
+This is not an academic paper: it is an **AI agent that trades options on paper**
+plus a **demo** judges can open and understand in three minutes.
 
-## Qué hay que construir (una frase)
+## What to build (one sentence)
 
-Un sistema que lee cuenta y mercado → propone un collar (o siembra SPY) → el risk
-layer veta o aprueba → el LLM explica → ejecuta en la cuenta **paper** de Alpaca →
-se ve en un dashboard.
+A system that reads the account and the market → proposes a collar (or seeds SPY) →
+the risk layer vetoes or approves → the LLM explains → executes on the Alpaca
+**paper** account → shows up on a dashboard.
 
-## Stack exigido
+## Required stack
 
-| Pieza | Rol | En este repo |
+| Piece | Role | In this repo |
 | --- | --- | --- |
-| **Trading API** | Obligatorio | `src/options_agent/alpaca/` con `alpaca-py` |
-| **MCP server** | Obligatorio MCP **o** CLI | Documentado en README; útil en Cursor |
-| **CLI** | Alternativa al MCP | Documentado; paper por defecto |
-| **Paper trading** | Dinero simulado, datos reales | Único modo del código |
-| **Opciones** | El track | `strategy/overlay.py` (collar) + `alpaca/orders.py` |
+| **Trading API** | Mandatory | `src/options_agent/alpaca/` with `alpaca-py` |
+| **MCP server** | Mandatory MCP **or** CLI | Documented in the README; useful in Cursor |
+| **CLI** | Alternative to MCP | Documented; paper by default |
+| **Paper trading** | Simulated money, real data | The only mode in the code |
+| **Options** | The track | `strategy/overlay.py` (collar) + `alpaca/orders.py` |
 
-Los jueces **no ven tu IDE**. En el kickoff el mínimo fue: descripción + vídeo ≤5 min +
-GitHub con demo. El P&L de la semana cuenta tanto como el repo.
+Judges **do not see your IDE**. At kickoff the minimum was: description + video ≤5 min
++ GitHub with demo. The week's P&L counts as much as the repo.
 
-## Cómo se gana
+## How you win
 
-1. Cumplir los requisitos duros (API + MCP/CLI, opciones, cuenta paper nueva).
-2. Que se note que es un **agente** con capa de riesgo, no un script que compra un call.
-3. No volar la cuenta: mejor curva aburrida y explicable que un all-in.
-4. Presentación: README, demo URL, vídeo ≤5 min, slides.
+1. Meet the hard requirements (API + MCP/CLI, options, new paper account).
+2. Make it obvious this is an **agent** with a risk layer, not a script that buys a call.
+3. Do not blow up the account: a boring, explainable curve beats an all-in.
+4. Presentation: README, demo URL, video ≤5 min, slides.
 
-Criterios (kickoff): P&L primero, luego API/MCP/CLI, creatividad, presentación.
-Premios main: **$2,500 / $1,500 / $1,000**. Extra social: **$500** × 2 equipos.
+Criteria (kickoff): P&L first, then API/MCP/CLI, creativity, presentation.
+Main prizes: **$2,500 / $1,500 / $1,000**. Extra social: **$500** × 2 teams.
 
-## Nuestro ángulo
+## Our angle
 
-**Collar agresivo**: el agente siembra 100 SPY y cubre con un put (~delta −0.20)
-financiado vendiendo un call (~delta +0.20). Riesgo definido (suelo en el put, techo
-en el call). Un playbook, sin auto-replanteo: si ya está collared, hold.
+**Aggressive collar**: the agent seeds 100 SPY and covers with a put (~delta −0.20)
+financed by selling a call (~delta +0.20). Defined risk (floor at the put, ceiling at
+the call). One playbook, no mid-week redesign: if it is already collared, hold.
 
-Si el kickoff empuja hacia volatilidad o alpha puro, se cambia `strategy/` y el resto
-del sistema (Alpaca, riesgo, journal, UI) sigue igual.
+If kickoff pushes toward volatility or pure alpha, you swap `strategy/` and the rest
+of the system (Alpaca, risk, journal, UI) stays the same.
 
-## Enlaces
+## Links
 
-- Evento: https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon
+- Event: https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon
 - Live: https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon/live
 - Discord: https://discord.gg/lablabai · Twitch: https://www.twitch.tv/lablabai
 - Alpaca paper: https://app.alpaca.markets/paper/dashboard/overview
 - MCP: https://github.com/alpacahq/alpaca-mcp-server · CLI: https://github.com/alpacahq/cli
-- Entrega: https://lablab.ai/delivering-your-hackathon-solution
+- Submission: https://lablab.ai/delivering-your-hackathon-solution
