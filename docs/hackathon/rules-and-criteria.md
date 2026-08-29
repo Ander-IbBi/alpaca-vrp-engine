@@ -41,9 +41,11 @@ team.
 | Kickoff | Fri 28 Aug (stream) | already happened |
 | Discord Q&A | 18:00 CET on kickoff day | already happened |
 | Build | 28 Aug – 4 Sep | the whole week |
-| **Submissions close** | Fri **4 Sep, 17:00 CET** | Fri **4 Sep ~11:00** (if CET = CEST, UTC+2) |
+| **Submissions close** | Fri **4 Sep, 17:00 CET** | Fri **4 Sep 11:00** (CEST, UTC+2) or **10:00** (CET literal, UTC+1) |
 
-When the countdown hits zero, **the form deactivates**. Start filling it days earlier.
+The hour is ambiguous, so [week-plan](week-plan.md) resolves it the safe way: work to
+**10:00 your clock**. When the countdown hits zero **the form deactivates**, so start
+filling it days earlier.
 
 ## Judge criteria (order on the stream)
 
@@ -64,18 +66,27 @@ Prize pool **$6,000**. Top 3 overall: **$2,500 / $1,500 / $1,000**.
 
 ## How to play them with *this* repo
 
-**P&L:** the collar has to be **live on paper all week**, not just in a screenshot.
-Unattended loop (`--loop --execute`) + journal. A week is noise; no all-in.
+**P&L first — and this is why the collar was scrapped.** A collar caps upside by
+construction: its best case over a 4.5-day window is a flat line, which cannot place in a
+contest scored on P&L. The VRP Engine is built to accumulate: it takes the side the
+variance risk premium favours, sizes by fractional Kelly on modelled edge, and runs
+**live on paper all week** under `--loop --execute` with a journal behind it. Aggressive,
+but every position defined-risk and every budget printed.
 
-**Tech:** the product trades with `alpaca-py` (Trading API). MCP and/or CLI have to
-appear in the README, the video, and, if you can, a real use (account/chain
-inspection). Without that, criterion 2 falls even if the collar is correct.
+**Tech:** all three Alpaca surfaces, each with a distinct job rather than a name-drop —
+`alpaca-py` executes, the CLI verifies the book before and after every ticket, and the
+agent is a real **MCP client** for the regime briefing and a second quote source. That is
+the difference between meeting criterion 2 and scoring on it.
 
-**Creativity:** defined-risk hedge overlay (put + covered call), not another momentum
-bot. Fits "portfolio income" / position management.
+**Creativity:** two-sided volatility trading with a **probability wedge** as the entry
+authorisation, plus a portfolio payoff engine that prices each proposal *as if already
+filled*. Most entries in a hackathon like this will be a directional bot or a
+premium-selling bot; being willing to *buy* premium when it is cheap, and being able to
+prove the whole book's worst case, is the differentiator.
 
-**Presentation:** ≤5 min video of *what you built*, GitHub with demo, form copy. Show
-the cycle: opportunity → decision → risk → order or hold.
+**Presentation:** ≤5 min video of *what you built*, GitHub with demo, form copy. Show the
+cycle: signal → structure → expected value → sizing → risk → order or stand down. The
+stand-down is worth showing — it is what makes the rest credible.
 
 ## What the stream did *not* close
 

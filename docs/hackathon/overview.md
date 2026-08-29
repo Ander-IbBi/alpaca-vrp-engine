@@ -14,19 +14,22 @@ plus a **demo** judges can open and understand in three minutes.
 
 ## What to build (one sentence)
 
-A system that reads the account and the market → proposes a collar (or seeds SPY) →
-the risk layer vetoes or approves → the LLM explains → executes on the Alpaca
-**paper** account → shows up on a dashboard.
+A system that reads the account and the market → measures where options are mispriced →
+proposes a defined-risk structure → the risk layer vetoes or approves → the LLM explains
+→ executes on the Alpaca **paper** account → shows up on a dashboard.
 
 ## Required stack
 
 | Piece | Role | In this repo |
 | --- | --- | --- |
-| **Trading API** | Mandatory | `src/options_agent/alpaca/` with `alpaca-py` |
-| **MCP server** | Mandatory MCP **or** CLI | Documented in the README; useful in Cursor |
-| **CLI** | Alternative to MCP | Documented; paper by default |
+| **Trading API** | Mandatory | `src/vrp_engine/alpaca/` with `alpaca-py`, the only path to `submit_order` |
+| **MCP server** | Mandatory MCP **or** CLI | `alpaca/mcp_bridge.py`: the agent is a real MCP client (research plane) |
+| **CLI** | Alternative to MCP | `alpaca/cli_bridge.py`: pre-trade cross-check and post-fill reconciliation |
 | **Paper trading** | Simulated money, real data | The only mode in the code |
-| **Options** | The track | `strategy/overlay.py` (collar) + `alpaca/orders.py` |
+| **Options** | The track | `strategy/structures.py` (verticals + condors) + `alpaca/orders.py` |
+
+We use all three rather than the minimum one, and each has a distinct job — see
+[mcp-and-cli](../mcp-and-cli.md).
 
 Judges **do not see your IDE**. At kickoff the minimum was: description + video ≤5 min
 + GitHub with demo. The week's P&L counts as much as the repo.
@@ -35,7 +38,8 @@ Judges **do not see your IDE**. At kickoff the minimum was: description + video 
 
 1. Meet the hard requirements (API + MCP/CLI, options, new paper account).
 2. Make it obvious this is an **agent** with a risk layer, not a script that buys a call.
-3. Do not blow up the account: a boring, explainable curve beats an all-in.
+3. Be aggressive where it is measurable and bounded where it is not: every trade has a
+   printed worst case, and the account has breakers the model cannot switch off.
 4. Presentation: README, demo URL, video ≤5 min, slides.
 
 Criteria (kickoff): P&L first, then API/MCP/CLI, creativity, presentation.
@@ -43,12 +47,21 @@ Main prizes: **$2,500 / $1,500 / $1,000**. Extra social: **$500** × 2 teams.
 
 ## Our angle
 
-**Aggressive collar**: the agent seeds 100 SPY and covers with a put (~delta −0.20)
-financed by selling a call (~delta +0.20). Defined risk (floor at the put, ceiling at
-the call). One playbook, no mid-week redesign: if it is already collared, hold.
+**VRP Engine.** Options are usually priced above what the underlying delivers, and
+sometimes below. The agent measures that gap per underlying every cycle, takes whichever
+side it favours — credit spreads and iron condors when volatility is rich, debit spreads
+when it is cheap — and only opens a position when its own probability model beats the
+odds the market's own price implies. Everything is defined risk, sized by fractional
+Kelly, and cleared by a portfolio payoff engine that prices each proposal *as if already
+filled*.
 
-If kickoff pushes toward volatility or pure alpha, you swap `strategy/` and the rest
-of the system (Alpaca, risk, journal, UI) stays the same.
+Judges asked for P&L first. A collar (our first design, now archived at
+[alpaca-collar-overlay](https://github.com/Ander-IbBi/alpaca-collar-overlay)) caps upside
+by construction, so its best case over 4.5 days is a flat line. This one is built to
+accumulate.
+
+The strategy sits behind a `Strategy` protocol, so the rest of the system (Alpaca planes,
+risk, journal, UI) is independent of it.
 
 ## Links
 

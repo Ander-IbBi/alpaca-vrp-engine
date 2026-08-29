@@ -2,7 +2,9 @@
 
 Source: kickoff 28 Aug 2026 + [lablab's generic guide](https://lablab.ai/delivering-your-hackathon-solution).
 Submit from the **team dashboard** → **Submit your project** (3 pages).
-The button appears next to the countdown. At **17:00 CET on 4 Sep** the form closes.
+The button appears next to the countdown. At **17:00 CET on 4 Sep** the form closes —
+which is 11:00 your clock at the latest, and 10:00 if "CET" is meant literally. Work to
+10:00; see [week-plan](week-plan.md).
 
 ## What they said at kickoff (minimum)
 
@@ -23,7 +25,7 @@ If the form has them, do not leave them empty. If they are not there, do not inv
 | --- | --- |
 | Title | Short (~50 characters) |
 | Short description | ≤255 characters |
-| Long description | ≥100 words: problem, collar/options, autonomous agent, paper, stack |
+| Long description | ≥100 words: the variance risk premium, defined-risk structures, the probability wedge, the portfolio stress engine, autonomous agent, paper, stack |
 | Video | MP4 ≤5 min (typical upload cap ≤300 MB if they ask for a file) |
 | GitHub | **Public** repo |
 | Application URL / demo | Deployed Streamlit, or a README so clear that cloning is enough |
@@ -37,8 +39,8 @@ If the form has them, do not leave them empty. If they are not there, do not inv
 - [ ] Main challenge: autonomous agent + API + (MCP **or** CLI) + **options** + **paper**
 - [ ] The agent has traded **during the week** (P&L / journal), not only a dry-run
 - [ ] Public repo; `.env` out; `.env.example` in
-- [ ] The video shows: identify → decide → manage position → paper P&L
-- [ ] MCP or CLI is visible (even if the loop uses `alpaca-py`)
+- [ ] The video shows: identify → decide → size → risk-check → manage position → paper P&L
+- [ ] MCP **and** CLI are visible, and shown doing real work in the cycle, not just named
 - [ ] `uv run pytest` and `uv run ruff check .` green
 
 ## Video (NotebookLM)

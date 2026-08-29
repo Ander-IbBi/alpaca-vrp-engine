@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from options_agent.cli import smoke  # noqa: E402
+from vrp_engine.cli import smoke  # noqa: E402
 
 if __name__ == "__main__":
     raise SystemExit(smoke())

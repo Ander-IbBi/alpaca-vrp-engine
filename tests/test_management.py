@@ -1,324 +1,484 @@
-"""Position management: what the agent does once the collar is already on.
+"""The urgency ladder over the open book, plus the flatten path."""
 
-These branches rarely fire during a short contest week, so they are pinned down
-here rather than left to the market to demonstrate.
-"""
+from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 
-from options_agent.alpaca.options import OptionCandidate
-from options_agent.risk.limits import RiskLimits, review_proposal
-from options_agent.strategy.base import StrategyContext
-from options_agent.strategy.overlay import (
-    AggressiveCollarOverlay,
-    free_covering_shares,
-    open_options,
-    pick_financing_call,
-    select_collar,
+import pytest
+from conftest import NOW, TODAY, make_candidate, occ_symbol
+
+from vrp_engine.alpaca.options import CONTRACT_MULTIPLIER
+from vrp_engine.config import Settings
+from vrp_engine.risk.account import US_EASTERN
+from vrp_engine.risk.portfolio import OptionHolding
+from vrp_engine.strategy.base import ACTION_CLOSE
+from vrp_engine.strategy.management import (
+    SAFE_SIGMA_DISTANCE,
+    build_exit,
+    exit_limit_price,
+    flatten_next,
+    group_open_structures,
+    infer_kind,
+    net_premium_to_usd,
+    next_management_action,
+    total_open_contracts,
+)
+from vrp_engine.strategy.structures import (
+    CALL_CREDIT_SPREAD,
+    CALL_DEBIT_SPREAD,
+    IRON_CONDOR,
+    PUT_CREDIT_SPREAD,
+    PUT_DEBIT_SPREAD,
 )
 
-TODAY = date(2026, 9, 1)
-NEAR = TODAY + timedelta(days=30)
-FAR = TODAY + timedelta(days=40)
-# Far enough out to still be inside the 21-45 DTE window once NEAR is expiring.
-NEXT = TODAY + timedelta(days=55)
-
-LIMITS = RiskLimits(
-    max_contracts_per_order=5,
-    max_order_notional_usd=2_500,
-    max_equity_notional_usd=80_000,
-)
+EXPIRY = TODAY + timedelta(days=7)
+TOMORROW = TODAY + timedelta(days=1)
+MIDDAY = datetime(2026, 8, 31, 12, 0, tzinfo=US_EASTERN)
+AFTERNOON = datetime(2026, 8, 31, 15, 30, tzinfo=US_EASTERN)
 
 
-class FakePosition:
-    def __init__(
-        self,
-        symbol: str,
-        qty: float,
-        price: float = 770.0,
-        *,
-        option: bool = False,
-        avg_entry: float | None = None,
-    ) -> None:
-        self.symbol = symbol
-        self.qty = qty
-        self.current_price = price
-        self.avg_entry_price = avg_entry
-        self.asset_class = "us_option" if option else "us_equity"
+def _settings(**overrides) -> Settings:
+    defaults = {
+        "alpaca_api_key": "k",
+        "alpaca_secret_key": "s",
+        "profit_take_credit_pct": 0.55,
+        "profit_take_condor_pct": 0.60,
+        "profit_take_debit_pct": 1.00,
+        "stop_loss_credit_multiple": 2.0,
+        "assignment_delta": 0.60,
+        "assignment_proximity_pct": 0.005,
+        "forced_exit_hour_et": 15,
+    }
+    defaults.update(overrides)
+    return Settings(**defaults)
 
 
-def _occ(kind: str, strike: float, expiry: date = NEAR) -> str:
-    flag = "P" if kind == "put" else "C"
-    return f"SPY{expiry:%y%m%d}{flag}{int(strike * 1000):08d}"
-
-
-def _opt(
-    kind: str,
-    strike: float,
+def _leg(
     *,
-    delta: float,
-    bid: float,
-    ask: float,
-    expiry: date = NEAR,
-) -> OptionCandidate:
-    return OptionCandidate(
-        symbol=_occ(kind, strike, expiry),
-        underlying="SPY",
+    kind: str = "put",
+    strike: float = 490.0,
+    contracts: float = -1.0,
+    entry: float = 3.0,
+    price: float | None = None,
+    pl: float = 0.0,
+    expiration=EXPIRY,
+    delta: float | None = None,
+    underlying: str = "SPY",
+) -> OptionHolding:
+    mark = entry if price is None else price
+    return OptionHolding(
+        symbol=occ_symbol(underlying, expiration, kind, strike),
+        underlying=underlying,
         option_type=kind,
         strike=strike,
-        expiration=expiry,
-        bid=bid,
-        ask=ask,
+        expiration=expiration,
+        contracts=contracts,
+        market_value=contracts * CONTRACT_MULTIPLIER * mark,
+        avg_entry_price=entry,
+        current_price=mark,
+        unrealized_pl=pl,
         delta=delta,
     )
 
 
-def _context(
+def _credit_spread(
     *,
-    spot: float,
-    options: list[FakePosition],
-    today: date = TODAY,
-    shares: float = 100,
-) -> StrategyContext:
-    return StrategyContext(
-        today=today,
-        market_open=True,
-        equity=100_000,
-        cash=20_000,
-        underlyings=["SPY"],
-        equity_positions=[FakePosition("SPY", shares, spot)],
-        option_positions=options,
-        spot_prices={"SPY": spot},
-    )
-
-
-# --- covering shares during a roll -------------------------------------------------
-
-
-def test_closing_a_short_call_frees_its_shares() -> None:
-    options = [FakePosition(_occ("call", 790), -1, option=True)]
-    assert free_covering_shares(100, options, "SPY") == 0
-    freed = free_covering_shares(
-        100, options, "SPY", closing_symbols={_occ("call", 790)}
-    )
-    assert freed == 100
-
-
-# --- zero-cost financing -----------------------------------------------------------
-
-
-def test_zero_cost_picks_the_call_that_pays_for_the_put() -> None:
-    calls = [
-        _opt("call", 780, delta=0.34, bid=5.0, ask=5.2),
-        _opt("call", 785, delta=0.26, bid=3.1, ask=3.3),
-        _opt("call", 795, delta=0.14, bid=1.0, ask=1.1),
-    ]
-    chosen = pick_financing_call(
-        calls, spot=770.0, target_call_delta=0.20, financing="zero_cost", put_mid=3.25
-    )
-    assert chosen is not None
-    assert chosen.strike == 785
-
-
-def test_zero_cost_refuses_to_cap_the_rally_too_close() -> None:
-    calls = [
-        _opt("call", 772, delta=0.45, bid=3.2, ask=3.3),  # matches the put, but 0.3% OTM
-        _opt("call", 790, delta=0.20, bid=1.8, ask=1.9),
-    ]
-    chosen = pick_financing_call(
-        calls, spot=770.0, target_call_delta=0.20, financing="zero_cost", put_mid=3.25
-    )
-    assert chosen is not None
-    assert chosen.strike == 790
-
-
-def test_delta_financing_is_unchanged() -> None:
-    chain = [
-        _opt("put", 750, delta=-0.20, bid=3.2, ask=3.3),
-        _opt("call", 785, delta=0.26, bid=3.1, ask=3.3),
-        _opt("call", 790, delta=0.20, bid=1.8, ask=1.9),
-    ]
-    picked = select_collar(chain, spot=770.0, today=TODAY, call_financing="delta")
-    assert picked is not None
-    assert picked.call.strike == 790
-
-
-# --- rolling an in-the-money short call --------------------------------------------
-
-
-def _rally_chain() -> list[OptionCandidate]:
+    pl: float = 0.0,
+    expiration=EXPIRY,
+    short_strike: float = 490.0,
+    short_delta: float | None = None,
+    underlying: str = "SPY",
+) -> list[OptionHolding]:
+    """Short the 490 put at 3.00, long the 485 at 1.00: a 200 USD credit per contract."""
     return [
-        _opt("call", 800, delta=0.34, bid=6.0, ask=6.2, expiry=FAR),
-        _opt("call", 810, delta=0.20, bid=3.0, ask=3.2, expiry=FAR),
-        _opt("put", 770, delta=-0.20, bid=4.0, ask=4.2, expiry=FAR),
+        _leg(
+            strike=short_strike,
+            contracts=-1.0,
+            entry=3.0,
+            pl=pl,
+            expiration=expiration,
+            delta=short_delta,
+            underlying=underlying,
+        ),
+        _leg(
+            strike=short_strike - 5,
+            contracts=1.0,
+            entry=1.0,
+            expiration=expiration,
+            underlying=underlying,
+        ),
     ]
 
 
-def test_short_call_in_the_money_is_rolled_up() -> None:
-    strategy = AggressiveCollarOverlay(chain_provider=lambda _: _rally_chain())
-    context = _context(
-        spot=795.0,
-        options=[
-            FakePosition(_occ("put", 750), 1, 1.2, option=True, avg_entry=3.25),
-            FakePosition(_occ("call", 789), -1, 8.0, option=True, avg_entry=1.85),
-        ],
+def _manage(structures, *, settings=None, now=MIDDAY, today=TODAY, spots=None, vols=None):
+    return next_management_action(
+        structures,
+        settings=settings or _settings(),
+        today=today,
+        now=now,
+        spots=spots or {"SPY": 500.0},
+        vols=vols or {"SPY": 0.20},
+        quotes={},
     )
-    proposal = strategy.propose(context)
-
-    assert not proposal.skip
-    assert [leg.position_intent for leg in proposal.legs] == ["buy_to_close", "sell_to_open"]
-    assert proposal.legs[0].symbol == _occ("call", 789)
-    assert proposal.legs[1].symbol.endswith("C00810000")
-    assert "Roll the short call up" in proposal.rationale
-    # The ticket only risks the debit it pays, and the shares still cover it.
-    assert proposal.covering_shares == 100
-    # Buy back at 8.00, sell the 810 at mid 3.10: a 4.90 net debit per contract.
-    assert proposal.estimated_cost_usd == 490.0
-    assert review_proposal(proposal, LIMITS).allowed
 
 
-def test_a_roll_that_costs_too_much_is_not_taken() -> None:
-    strategy = AggressiveCollarOverlay(
-        chain_provider=lambda _: _rally_chain(),
-        max_roll_debit_usd=100.0,
-    )
-    context = _context(
-        spot=795.0,
-        options=[
-            FakePosition(_occ("put", 750), 1, 1.2, option=True, avg_entry=3.25),
-            FakePosition(_occ("call", 789), -1, 8.0, option=True, avg_entry=1.85),
-        ],
-    )
-    proposal = strategy.propose(context)
-    assert proposal.skip
-    assert "no acceptable replacement call" in proposal.rationale
+# --- shape inference --------------------------------------------------------
 
 
-def test_replacement_call_must_sit_above_spot_and_the_old_strike() -> None:
-    # Only a lower strike is quoted, so there is nothing worth rolling into.
-    chain = [_opt("call", 780, delta=0.40, bid=6.0, ask=6.2, expiry=FAR)]
-    strategy = AggressiveCollarOverlay(chain_provider=lambda _: chain)
-    context = _context(
-        spot=795.0,
-        options=[
-            FakePosition(_occ("call", 789), -1, 8.0, option=True, avg_entry=1.85),
-        ],
-    )
-    assert strategy.propose(context).skip
+def test_two_puts_for_a_credit_is_a_put_credit_spread():
+    legs = _credit_spread()
+    assert infer_kind(legs, net_premium=200.0) == PUT_CREDIT_SPREAD
 
 
-# --- rolling the collar before expiry ----------------------------------------------
+def test_two_puts_for_a_debit_is_a_put_debit_spread():
+    assert infer_kind(_credit_spread(), net_premium=-200.0) == PUT_DEBIT_SPREAD
 
 
-def test_collar_near_expiry_is_rolled_out() -> None:
-    chain = [
-        _opt("put", 750, delta=-0.20, bid=3.2, ask=3.3, expiry=NEXT),
-        _opt("call", 790, delta=0.20, bid=3.1, ask=3.3, expiry=NEXT),
+def test_two_calls_for_a_credit_is_a_call_credit_spread():
+    legs = [_leg(kind="call", strike=510), _leg(kind="call", strike=515, contracts=1.0)]
+    assert infer_kind(legs, net_premium=150.0) == CALL_CREDIT_SPREAD
+
+
+def test_two_calls_for_a_debit_is_a_call_debit_spread():
+    legs = [_leg(kind="call", strike=510), _leg(kind="call", strike=515, contracts=1.0)]
+    assert infer_kind(legs, net_premium=-150.0) == CALL_DEBIT_SPREAD
+
+
+def test_four_legs_for_a_credit_is_an_iron_condor():
+    legs = [
+        *_credit_spread(),
+        _leg(kind="call", strike=510, contracts=-1.0, entry=2.0),
+        _leg(kind="call", strike=515, contracts=1.0, entry=1.0),
     ]
-    strategy = AggressiveCollarOverlay(chain_provider=lambda _: chain)
-    soon = NEAR - timedelta(days=5)  # the open collar is 5 DTE
-    context = _context(
-        spot=770.0,
-        today=soon,
-        options=[
-            FakePosition(_occ("put", 750), 1, 0.5, option=True, avg_entry=3.25),
-            FakePosition(_occ("call", 790), -1, 0.4, option=True, avg_entry=1.85),
-        ],
-    )
-    proposal = strategy.propose(context)
-
-    assert not proposal.skip
-    intents = [leg.position_intent for leg in proposal.legs]
-    assert intents == ["sell_to_close", "buy_to_close", "buy_to_open", "sell_to_open"]
-    assert "Roll the collar out" in proposal.rationale
-    assert proposal.covering_shares == 100
-    assert review_proposal(proposal, LIMITS).allowed
+    assert infer_kind(legs, net_premium=300.0) == IRON_CONDOR
 
 
-# --- harvesting a put that already paid off ----------------------------------------
+def test_an_unrecognised_shape_is_labelled_custom():
+    assert infer_kind([_leg()], net_premium=300.0) == "custom"
 
 
-def test_a_doubled_put_is_harvested_and_re_armed() -> None:
-    chain = [
-        _opt("put", 725, delta=-0.20, bid=2.0, ask=2.2),
-        _opt("put", 740, delta=-0.40, bid=5.0, ask=5.2),
+# --- grouping ---------------------------------------------------------------
+
+
+def test_legs_group_by_underlying_and_expiry():
+    legs = [*_credit_spread(), *_credit_spread(expiration=TOMORROW)]
+    structures = group_open_structures(legs)
+    assert len(structures) == 2
+    assert {s.expiration for s in structures} == {EXPIRY, TOMORROW}
+
+
+def test_grouping_ignores_closed_legs():
+    assert group_open_structures([_leg(contracts=0.0)]) == []
+
+
+def test_the_closable_size_is_the_thinnest_leg():
+    legs = [
+        _leg(strike=490, contracts=-5.0, entry=3.0),
+        _leg(strike=485, contracts=2.0, entry=1.0),
     ]
-    strategy = AggressiveCollarOverlay(chain_provider=lambda _: chain)
-    # SPY fell to 745, so the 750 put bought for 3.25 is now worth 8.00.
-    context = _context(
-        spot=745.0,
-        options=[FakePosition(_occ("put", 750), 1, 8.0, option=True, avg_entry=3.25)],
+    assert group_open_structures(legs)[0].contracts == 2
+
+
+def test_the_net_premium_of_a_credit_spread_is_positive():
+    structure = group_open_structures(_credit_spread())[0]
+    assert structure.net_premium_usd == pytest.approx(200.0)
+    assert structure.is_credit
+
+
+def test_the_net_premium_of_a_debit_spread_is_negative():
+    legs = [
+        _leg(kind="call", strike=500, contracts=1.0, entry=8.0),
+        _leg(kind="call", strike=510, contracts=-1.0, entry=3.0),
+    ]
+    structure = group_open_structures(legs)[0]
+    assert structure.net_premium_usd < 0
+    assert not structure.is_credit
+
+
+def test_capture_fraction_is_pnl_over_the_premium():
+    structure = group_open_structures(_credit_spread(pl=100.0))[0]
+    assert structure.capture_fraction == pytest.approx(0.5)
+
+
+def test_capture_fraction_is_zero_without_a_premium():
+    legs = [
+        _leg(strike=490, contracts=-1.0, entry=1.0),
+        _leg(strike=485, contracts=1.0, entry=1.0),
+    ]
+    assert group_open_structures(legs)[0].capture_fraction == 0.0
+
+
+def test_short_legs_are_the_negative_ones():
+    structure = group_open_structures(_credit_spread())[0]
+    assert len(structure.short_legs) == 1
+    assert structure.short_legs[0].strike == 490.0
+
+
+def test_dte_and_description_read_cleanly():
+    structure = group_open_structures(_credit_spread())[0]
+    assert structure.dte(TODAY) == 7
+    assert "SPY" in structure.describe()
+    assert EXPIRY.isoformat() in structure.describe()
+
+
+def test_open_contracts_are_summed_per_symbol():
+    legs = [*_credit_spread(), *_credit_spread()]
+    totals = total_open_contracts(legs)
+    assert totals[occ_symbol("SPY", EXPIRY, "put", 490)] == -2.0
+    assert totals[occ_symbol("SPY", EXPIRY, "put", 485)] == 2.0
+
+
+def test_net_premium_converts_a_per_share_price_to_dollars():
+    assert net_premium_to_usd(2.0, 3) == pytest.approx(600.0)
+
+
+# --- exit tickets -----------------------------------------------------------
+
+
+def test_an_exit_reverses_every_leg():
+    structure = group_open_structures(_credit_spread())[0]
+    exit_trade = build_exit(structure, quotes={}, reason="test", today=TODAY)
+    by_symbol = {leg.symbol: leg for leg in exit_trade.legs}
+    assert by_symbol[occ_symbol("SPY", EXPIRY, "put", 490)].side == "buy"
+    assert by_symbol[occ_symbol("SPY", EXPIRY, "put", 485)].side == "sell"
+
+
+def test_every_exit_leg_is_marked_to_close():
+    structure = group_open_structures(_credit_spread())[0]
+    exit_trade = build_exit(structure, quotes={}, reason="test", today=TODAY)
+    assert exit_trade.is_closing
+    assert exit_trade.action == ACTION_CLOSE
+
+
+def test_an_exit_carries_the_reason_into_its_rationale():
+    structure = group_open_structures(_credit_spread())[0]
+    exit_trade = build_exit(structure, quotes={}, reason="profit target hit", today=TODAY)
+    assert "profit target hit" in exit_trade.rationale
+
+
+def test_the_exit_limit_is_the_net_cost_of_closing():
+    # Short leg marked 2.00, long leg 0.50: closing the spread costs 1.50 net.
+    legs = [
+        _leg(strike=490, contracts=-1.0, entry=3.0, price=2.0),
+        _leg(strike=485, contracts=1.0, entry=1.0, price=0.5),
+    ]
+    structure = group_open_structures(legs)[0]
+    assert exit_limit_price(structure, {}) == pytest.approx(1.5)
+
+
+def test_a_live_chain_quote_overrides_the_brokers_mark():
+    legs = [
+        _leg(strike=490, contracts=-1.0, entry=3.0, price=2.0),
+        _leg(strike=485, contracts=1.0, entry=1.0, price=0.5),
+    ]
+    structure = group_open_structures(legs)[0]
+    quotes = {
+        occ_symbol("SPY", EXPIRY, "put", 490): make_candidate(
+            strike=490.0, expiration=EXPIRY, bid=0.9, ask=1.1
+        )
+    }
+    assert exit_limit_price(structure, quotes) == pytest.approx(0.5)
+
+
+def test_a_zero_mark_leaves_the_exit_without_a_limit():
+    legs = [
+        _leg(strike=490, contracts=-1.0, entry=3.0, price=0.0),
+        _leg(strike=485, contracts=1.0, entry=1.0, price=0.5),
+    ]
+    structure = group_open_structures(legs)[0]
+    assert exit_limit_price(structure, {}) is None
+
+
+def test_the_exit_quantity_matches_the_structure_size():
+    legs = [
+        _leg(strike=490, contracts=-4.0, entry=3.0),
+        _leg(strike=485, contracts=4.0, entry=1.0),
+    ]
+    structure = group_open_structures(legs)[0]
+    assert build_exit(structure, quotes={}, reason="x", today=TODAY).qty == 4
+
+
+# --- the ladder -------------------------------------------------------------
+
+
+def test_an_empty_book_reports_nothing_to_manage():
+    decision = _manage([])
+    assert decision.trade is None
+    assert decision.checks == ["no open structures to manage"]
+
+
+def test_a_healthy_position_is_left_alone():
+    decision = _manage(group_open_structures(_credit_spread(pl=40.0)))
+    assert decision.trade is None
+    assert any("inside every exit threshold" in check for check in decision.checks)
+
+
+def test_a_loss_past_the_stop_is_closed():
+    # 200 USD credit, 450 USD loss: past the 2x stop.
+    decision = _manage(group_open_structures(_credit_spread(pl=-450.0)))
+    assert decision.trade is not None
+    assert "stop" in decision.trade.rationale
+
+
+def test_a_loss_inside_the_stop_is_held():
+    decision = _manage(group_open_structures(_credit_spread(pl=-300.0)))
+    assert decision.trade is None
+
+
+def test_a_tighter_stop_fires_sooner():
+    structures = group_open_structures(_credit_spread(pl=-250.0))
+    assert _manage(structures).trade is None
+    assert _manage(structures, settings=_settings(stop_loss_credit_multiple=1.0)).trade
+
+
+def test_the_profit_target_closes_a_credit_spread():
+    decision = _manage(group_open_structures(_credit_spread(pl=130.0)))
+    assert decision.trade is not None
+    assert "captured" in decision.trade.rationale
+
+
+def test_just_below_the_profit_target_is_held():
+    decision = _manage(group_open_structures(_credit_spread(pl=100.0)))
+    assert decision.trade is None
+
+
+def test_a_condor_uses_its_own_higher_target():
+    legs = [
+        *_credit_spread(pl=170.0),
+        _leg(kind="call", strike=510, contracts=-1.0, entry=2.0),
+        _leg(kind="call", strike=515, contracts=1.0, entry=1.0),
+    ]
+    structures = group_open_structures(legs)
+    assert structures[0].kind == IRON_CONDOR
+    # 300 USD credit, 170 USD captured: 57%, above the 55% vertical target but below
+    # the 60% condor target, so the condor must still be held.
+    assert _manage(structures).trade is None
+
+
+def test_a_debit_spread_needs_a_hundred_percent_capture():
+    # 500 USD paid, 400 USD gained: a good trade, but not yet a double.
+    legs = [
+        _leg(kind="call", strike=500, contracts=1.0, entry=8.0, pl=400.0),
+        _leg(kind="call", strike=510, contracts=-1.0, entry=3.0),
+    ]
+    structures = group_open_structures(legs)
+    assert not structures[0].is_credit
+    assert _manage(structures).trade is None
+
+
+def test_a_doubled_debit_spread_is_closed():
+    legs = [
+        _leg(kind="call", strike=500, contracts=1.0, entry=8.0, pl=520.0),
+        _leg(kind="call", strike=510, contracts=-1.0, entry=3.0),
+    ]
+    assert _manage(group_open_structures(legs)).trade is not None
+
+
+def test_a_pinned_short_strike_on_expiry_day_is_closed():
+    structures = group_open_structures(
+        _credit_spread(expiration=TOMORROW, short_strike=500.0)
     )
-    proposal = strategy.propose(context)
-
-    assert not proposal.skip
-    assert [leg.position_intent for leg in proposal.legs] == ["sell_to_close", "buy_to_open"]
-    assert proposal.legs[1].symbol.endswith("P00725000")
-    assert proposal.estimated_cost_usd == -590.0  # cash banked
-    assert "Harvest the hedge" in proposal.rationale
-    assert review_proposal(proposal, LIMITS).allowed
+    decision = _manage(structures, today=TODAY, spots={"SPY": 500.5})
+    assert decision.trade is not None
+    assert "pinned" in decision.trade.rationale
 
 
-def test_harvest_is_refused_when_the_new_floor_leaves_too_much_risk() -> None:
-    # Re-arming this far below spot would leave more downside than the order cap.
-    chain = [_opt("put", 690, delta=-0.20, bid=2.0, ask=2.2)]
-    strategy = AggressiveCollarOverlay(chain_provider=lambda _: chain)
-    context = _context(
-        spot=745.0,
-        options=[FakePosition(_occ("put", 750), 1, 8.0, option=True, avg_entry=3.25)],
+def test_a_high_short_delta_on_expiry_day_is_closed():
+    structures = group_open_structures(
+        _credit_spread(expiration=TOMORROW, short_strike=495.0, short_delta=-0.72)
     )
-    proposal = strategy.propose(context)
-    assert proposal.skip
-    assert "no cheaper put to re-arm the floor" in proposal.rationale
+    decision = _manage(structures, today=TODAY, spots={"SPY": 500.0})
+    assert decision.trade is not None
+    assert "delta reached" in decision.trade.rationale
 
 
-def test_a_put_that_has_not_paid_off_is_left_alone() -> None:
-    chain = [_opt("put", 700, delta=-0.20, bid=2.0, ask=2.2)]
-    strategy = AggressiveCollarOverlay(chain_provider=lambda _: chain)
-    context = _context(
-        spot=768.0,
-        options=[
-            FakePosition(_occ("put", 750), 1, 3.6, option=True, avg_entry=3.25),
-            FakePosition(_occ("call", 790), -1, 1.5, option=True, avg_entry=1.85),
-        ],
+def test_assignment_risk_is_ignored_while_expiry_is_still_far_away():
+    structures = group_open_structures(
+        _credit_spread(short_strike=500.0, short_delta=-0.72)
     )
-    proposal = strategy.propose(context)
-    assert proposal.skip
-    assert "1.1x" in proposal.rationale
+    assert _manage(structures, spots={"SPY": 500.1}).trade is None
 
 
-# --- the quiet case ----------------------------------------------------------------
-
-
-def test_hold_explains_every_check_it_ran() -> None:
-    strategy = AggressiveCollarOverlay(chain_provider=lambda _: [])
-    context = _context(
-        spot=770.0,
-        options=[
-            FakePosition(_occ("put", 750), 1, 3.0, option=True, avg_entry=3.25),
-            FakePosition(_occ("call", 790), -1, 1.6, option=True, avg_entry=1.85),
-        ],
+def test_the_last_session_closes_anything_not_safely_out_of_the_money():
+    structures = group_open_structures(
+        _credit_spread(expiration=TOMORROW, short_strike=495.0)
     )
-    proposal = strategy.propose(context)
-
-    assert proposal.skip
-    assert "overlay already on" in proposal.rationale
-    assert "safe" in proposal.rationale  # the short call was checked
-    assert "DTE" in proposal.rationale  # so was the expiry
-    assert "0.9x" in proposal.rationale  # and so was the hedge
+    decision = _manage(structures, now=AFTERNOON, today=TODAY, spots={"SPY": 500.0})
+    assert decision.trade is not None
+    assert "two sigma" in decision.trade.rationale
 
 
-def test_open_options_reads_entry_and_current_prices() -> None:
-    legs = open_options(
-        [
-            FakePosition(_occ("call", 790), -1, 8.0, option=True, avg_entry=1.85),
-            FakePosition("SPY", 100, 770.0),
-        ],
-        "SPY",
+def test_a_position_far_out_of_the_money_is_allowed_to_expire():
+    structures = group_open_structures(
+        _credit_spread(expiration=TOMORROW, short_strike=400.0)
     )
-    assert len(legs) == 1
-    leg = legs[0]
-    assert leg.contracts == -1
-    assert leg.option_type == "call"
-    assert leg.profit_multiple is not None
-    assert round(leg.profit_multiple, 2) == 4.32
+    decision = _manage(
+        structures, now=AFTERNOON, today=TODAY, spots={"SPY": 500.0}, vols={"SPY": 0.15}
+    )
+    assert decision.trade is None
+    assert any("two sigma out of the money" in check for check in decision.checks)
+
+
+def test_the_forced_exit_only_applies_after_its_hour():
+    structures = group_open_structures(
+        _credit_spread(expiration=TOMORROW, short_strike=495.0)
+    )
+    assert _manage(structures, now=MIDDAY, today=TODAY).trade is None
+
+
+def test_the_safe_distance_is_two_sigma():
+    assert SAFE_SIGMA_DISTANCE == 2.0
+
+
+def test_the_worst_position_is_handled_first():
+    legs = [
+        *_credit_spread(pl=-450.0, underlying="SPY"),
+        *_credit_spread(pl=150.0, underlying="QQQ"),
+    ]
+    decision = _manage(
+        group_open_structures(legs), spots={"SPY": 500.0, "QQQ": 500.0}, vols={"SPY": 0.2}
+    )
+    assert decision.trade is not None
+    assert decision.trade.analytics.underlying == "SPY"
+
+
+def test_only_one_action_is_returned_per_cycle():
+    legs = [
+        *_credit_spread(pl=-450.0, underlying="SPY"),
+        *_credit_spread(pl=-450.0, underlying="QQQ"),
+    ]
+    decision = _manage(group_open_structures(legs), spots={"SPY": 500.0, "QQQ": 500.0})
+    assert decision.trade is not None
+    assert len({leg.symbol[:3] for leg in decision.trade.legs}) == 1
+
+
+# --- flatten ----------------------------------------------------------------
+
+
+def test_flatten_picks_the_biggest_loser():
+    legs = [
+        *_credit_spread(pl=-800.0, underlying="SPY"),
+        *_credit_spread(pl=-100.0, underlying="QQQ"),
+    ]
+    trade = flatten_next(
+        group_open_structures(legs), quotes={}, today=TODAY, reason="breaker fired"
+    )
+    assert trade is not None
+    assert trade.analytics.underlying == "SPY"
+    assert "breaker fired" in trade.rationale
+
+
+def test_flatten_on_an_empty_book_is_a_no_op():
+    assert flatten_next([], quotes={}, today=TODAY, reason="x") is None
+
+
+def test_a_flatten_ticket_is_a_close():
+    trade = flatten_next(
+        group_open_structures(_credit_spread()), quotes={}, today=TODAY, reason="x"
+    )
+    assert trade.is_closing
+
+
+def test_management_uses_the_wall_clock_hour_in_eastern_time():
+    # NOW in the shared fixtures is 10:30 New York, which is before the forced-exit hour.
+    assert NOW.astimezone(US_EASTERN).hour == 10

@@ -13,12 +13,12 @@ stress and digest it step by step.
 - **Comment meaningful chunks**: explain the *why*, not the obvious *what*.
 - Clear, descriptive names; small readable steps over dense one-liners.
 - Keep modules focused; a reader should follow the flow top-to-bottom.
-- Prefer pure functions for anything worth testing (see `select_protective_put`).
+- Prefer pure functions for anything worth testing (see `strategy/pricing.py`).
 
 ```python
-# One contract covers 100 shares, so never round up: over-hedging turns a hedge
-# into a directional bet.
-contracts = int(shares // 100)
+# Planning to use the last dollar of buying power means a fill a few cents worse
+# than the mid bounces the whole ticket.
+usable_buying_power = 0.9 * options_buying_power
 ```
 
 ## Notebooks

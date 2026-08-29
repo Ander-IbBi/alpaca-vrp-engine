@@ -1,7 +1,7 @@
 [project]
-name = "alpaca-options-agent"
-version = "0.1.0"
-description = "Paper-only AI options overlay agent for the Alpaca AI Trading Agents Hackathon."
+name = "alpaca-vrp-engine"
+version = "1.0.0"
+description = "VRP Engine: a paper-only autonomous agent that trades the variance risk premium with defined-risk option structures on Alpaca."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -11,6 +11,8 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "python-dotenv>=1.0.1",
     "streamlit>=1.40.0",
+    # Used directly by the dashboard tables and charts.
+    "pandas>=2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -18,14 +20,19 @@ dev = [
     "pytest>=8.3.0",
     "ruff>=0.6.0",
 ]
-# Wired after kickoff, when the agent starts reasoning with an LLM.
+# The LLM analyst narrates the regime and may soft-veto. The engine runs without it.
 llm = [
     "openai>=1.50.0",
 ]
+# Research plane: the agent talks to Alpaca's MCP server over stdio.
+mcp = [
+    "mcp>=1.2.0",
+]
 
 [project.scripts]
-smoke-paper = "options_agent.cli:smoke"
-run-agent = "options_agent.cli:run_agent"
+smoke-paper = "vrp_engine.cli:smoke"
+run-agent = "vrp_engine.cli:run_agent"
+scan = "vrp_engine.cli:scan"
 
 [build-system]
 requires = ["setuptools>=68"]

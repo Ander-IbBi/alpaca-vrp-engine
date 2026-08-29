@@ -15,7 +15,11 @@ none may be added.
   with empty values.
 - Order submission goes through `risk.review_proposal`. Do not add a code path that
   reaches `submit_order` without it.
-- Naked short options stay blocked.
+- Naked short options stay blocked. Every short leg needs a long leg of the same type and
+  expiry inside the same ticket, and `review_proposal` proves it from the legs rather than
+  trusting the ticket's label.
+- The MCP research plane stays read-only: keep the `READ_ONLY_TOOLS` allow-list enforced
+  in code, never in a prompt.
 - `DRY_RUN` defaults to true; executing must be an explicit, visible choice.
 
 ## Before calling work done
