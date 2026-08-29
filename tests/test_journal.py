@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
-from vrp_engine.journal import Journal
+from vrp_engine.journal import DEMO_JOURNAL_PATH, Journal, read_entries
 
 
 @pytest.fixture
@@ -93,3 +94,46 @@ def test_non_numeric_equity_values_do_not_break_the_high_water_mark(journal):
     journal.append("cycle", {"equity": "unavailable"})
     journal.append("cycle", {"equity": 99_000.0})
     assert journal.high_water_mark() == pytest.approx(99_000.0)
+
+
+def test_read_entries_prefers_the_live_journal_when_it_has_lines(tmp_path):
+    live = tmp_path / "agent.jsonl"
+    Journal(live).append("cycle", {"equity": 1.0})
+    fallback = tmp_path / "demo.jsonl"
+    Journal(fallback).append("cycle", {"equity": 99.0})
+    entries, from_sample = read_entries(live, fallback=fallback)
+    assert from_sample is False
+    assert entries[0]["equity"] == pytest.approx(1.0)
+
+
+def test_read_entries_falls_back_when_the_live_journal_is_missing(tmp_path):
+    fallback = tmp_path / "demo.jsonl"
+    Journal(fallback).append("cycle", {"equity": 2.0})
+    entries, from_sample = read_entries(tmp_path / "absent.jsonl", fallback=fallback)
+    assert from_sample is True
+    assert entries[0]["equity"] == pytest.approx(2.0)
+
+
+def test_read_entries_falls_back_when_the_live_journal_is_empty(tmp_path):
+    live = tmp_path / "agent.jsonl"
+    live.write_text("", encoding="utf-8")
+    fallback = tmp_path / "demo.jsonl"
+    Journal(fallback).append("cycle", {"equity": 3.0})
+    entries, from_sample = read_entries(live, fallback=fallback)
+    assert from_sample is True
+    assert entries[0]["equity"] == pytest.approx(3.0)
+
+
+def test_read_entries_without_a_fallback_returns_empty(tmp_path):
+    entries, from_sample = read_entries(tmp_path / "absent.jsonl", fallback=None)
+    assert entries == []
+    assert from_sample is False
+
+
+def test_the_bundled_demo_journal_replays_a_scanner_and_a_rationale():
+    entries, from_sample = read_entries(Path("no-such-journal.jsonl"))
+    assert from_sample is True
+    assert DEMO_JOURNAL_PATH.exists()
+    assert len(entries) >= 2
+    assert any((entry.get("scan") or {}).get("top") for entry in entries)
+    assert any((entry.get("proposal") or {}).get("rationale") for entry in entries)

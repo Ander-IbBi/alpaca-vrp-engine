@@ -180,7 +180,7 @@ Both run on every push (`.github/workflows/`).
 
 ```
 alpaca-vrp-engine/
-  README.md            ← what judges and GitHub see first
+  README.md            ← what GitHub and a clone see first
   AGENTS.md            ← context for Cursor and other AI agents
   pyproject.toml       ← dependencies, extras and console scripts (uv)
   .env.example         ← every variable, values empty
@@ -188,6 +188,6 @@ alpaca-vrp-engine/
   app/                 ← Streamlit dashboard
   scripts/             ← smoke test, broker report, agent runner
   tests/               ← offline, keyless
-  docs/                ← strategy maths, this file, broker planes, competition notes
+  docs/                ← strategy maths, this file, broker planes
   .github/workflows/   ← CI: tests + lint
 ```

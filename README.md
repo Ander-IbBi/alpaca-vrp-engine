@@ -5,9 +5,14 @@ the volatility the option market charges and the volatility the underlying actua
 delivers — with defined-risk spreads across a multi-underlying universe. It runs
 exclusively on **Alpaca paper trading**.
 
+[![CI](https://github.com/Ander-IbBi/alpaca-vrp-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Ander-IbBi/alpaca-vrp-engine/actions/workflows/ci.yml)
+
 Built for the
 [Alpaca AI Trading Agents Hackathon](https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon)
 (28 Aug – 4 Sep 2026, track *Options Alpha Agents*).
+
+The previous design — a defined-risk collar overlay — is archived at
+[alpaca-collar-overlay](https://github.com/Ander-IbBi/alpaca-collar-overlay).
 
 ## The thesis in one paragraph
 
@@ -168,7 +173,7 @@ uv run python scripts/broker_report.py        # SDK vs CLI, signals, scanner, st
 uv run run-agent                              # one cycle (dry run)
 uv run run-agent --execute                    # send the ticket to paper
 uv run run-agent --loop --execute --interval 180
-uv run streamlit run app/streamlit_app.py     # judge-facing dashboard
+uv run streamlit run app/streamlit_app.py     # dashboard (read-only; never sends orders)
 .\scripts\run-forever.ps1 -Execute            # Windows: restart-on-crash wrapper
 uv run pytest                                 # 580+ tests, no keys or network needed
 uv run ruff check .
@@ -176,6 +181,11 @@ uv run ruff check .
 
 Optional extras: `uv sync --extra llm` for the analyst, `uv sync --extra mcp` for the
 research plane. Both fail open when absent.
+
+The Streamlit app never submits an order. Without API keys it still replays
+`app/fixtures/demo_journal.jsonl`. On Streamlit Community Cloud, put **paper** keys in
+the secrets UI (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `DRY_RUN=true`,
+`ALPACA_LIVE_TRADE=false`) — never in the repo.
 
 `--loop` repeats the cycle during the session and polls less often overnight. Options are
 day orders, so nothing is sent while the market is closed.
@@ -191,7 +201,8 @@ day orders, so nothing is sent while the market is closed.
 | `src/vrp_engine/agent/` | Cycle loop, LLM analyst, read-only tool surface |
 | `src/vrp_engine/journal.py` | Append-only JSONL audit trail |
 | `app/streamlit_app.py` | Dashboard: equity curve, open structures, scanner, payoff curve, risk gauges, journal |
-| `docs/` | Strategy maths, architecture, broker planes, competition notes |
+| `app/fixtures/` | Sample decision journal the hosted demo falls back to |
+| `docs/` | Strategy maths, architecture, MCP and CLI |
 
 Every module under `strategy/` except `engine.py` is a pure function of data, which is
 why the test suite can replay the entire decision surface offline.
@@ -221,6 +232,12 @@ knowing:
 At a 45% aggregate max-loss budget and 0.35 Kelly, a realistic good week is roughly +8
 to +14% and a realistic bad week is −10 to −18%, with the hard floor at −18% forcing a
 flatten. The dashboard shows that number at all times rather than hiding it.
+
+## Further reading
+
+- [Strategy](docs/strategy.md) — realised vs implied vol, the wedge, Kelly, the payoff engine
+- [Architecture](docs/architecture.md) — cycle wiring and module map
+- [MCP and CLI](docs/mcp-and-cli.md) — why three Alpaca surfaces, and why only one can trade
 
 ## License
 

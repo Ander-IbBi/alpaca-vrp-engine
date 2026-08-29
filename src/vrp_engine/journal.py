@@ -11,6 +11,31 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+# Bundled dry-run trail for the hosted dashboard. The live journal is gitignored
+# and does not exist on Streamlit Community Cloud's ephemeral filesystem.
+DEMO_JOURNAL_PATH = Path(__file__).resolve().parents[2] / "app" / "fixtures" / "demo_journal.jsonl"
+
+
+def read_entries(
+    path: Path,
+    *,
+    fallback: Path | None = DEMO_JOURNAL_PATH,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Live journal first; the bundled demo trail if that file is empty.
+
+    The second value is True when the fallback was used, so the dashboard can
+    say so rather than pretending this Cloud instance wrote the lines.
+    """
+    entries = Journal(path).read_all()
+    if entries:
+        return entries, False
+    if fallback is None:
+        return [], False
+    fallback_path = Path(fallback)
+    if not fallback_path.exists():
+        return [], False
+    return Journal(fallback_path).read_all(), True
+
 
 class Journal:
     def __init__(self, path: Path) -> None:

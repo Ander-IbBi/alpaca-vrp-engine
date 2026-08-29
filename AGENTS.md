@@ -8,11 +8,9 @@ defined-risk option structures (credit spreads, debit spreads, iron condors) acr
 multi-underlying universe, for the
 [Alpaca AI Trading Agents Hackathon](https://lablab.ai/ai-hackathons/alpaca-ai-trading-agents-hackathon)
 (28 Aug – 4 Sep 2026, track **Options Alpha Agents**). It runs **only on Alpaca paper**.
-The deliverable is public code + Streamlit demo + video, not the IDE chat.
 
 The previous design (a collar overlay) is archived at
-`Ander-IbBi/alpaca-collar-overlay`. This repo is independent of the Obsidian vault
-`Vault/deep-hedging` (theoretical study).
+`Ander-IbBi/alpaca-collar-overlay`.
 
 ## Stack
 - Python 3.11+, packaged with **uv** (`pyproject.toml`)
@@ -33,11 +31,11 @@ The previous design (a collar overlay) is archived at
     and stress engine), `account.py` (breakers, trading window)
   - `agent/` — `loop.py` (cycle), `analyst.py` (briefing + soft veto), `tools.py` (read-only)
   - `journal.py` — JSONL decision trail, and the drawdown breaker's memory
-- `app/streamlit_app.py` — dashboard for judges
+- `app/streamlit_app.py` — Streamlit dashboard
 - `scripts/` — `smoke_paper.py`, `broker_report.py`, `run_agent.py`; console scripts
   `smoke-paper`, `scan`, `run-agent`
-- `tests/` — 586 tests, shared fakes in `conftest.py`, **no network, no keys**
-- `docs/` — `strategy.md` (maths), `architecture.md`, `mcp-and-cli.md`, `hackathon/`
+- `tests/` — 580+ tests, shared fakes in `conftest.py`, **no network, no keys**
+- `docs/` — `strategy.md` (maths), `architecture.md`, `mcp-and-cli.md`
 
 ## Hard rules
 - **Never live.** `TradingClient(..., paper=True)`; do not add a live flag.

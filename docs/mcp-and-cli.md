@@ -1,8 +1,8 @@
 # Alpaca MCP and CLI in this project
 
-The hackathon requires the Alpaca **Trading API** plus the **MCP server and/or the CLI**.
-This project uses all three, and each one has a job the other two cannot do. None of them
-is decoration, and only one of them can move money.
+The agent uses the Alpaca **Trading API**, the **MCP server**, and the **CLI**.
+Each one has a job the other two cannot do. None of them is decoration, and only one of
+them can move money.
 
 | Plane | Surface | Job | Fails how? |
 | --- | --- | --- | --- |

@@ -9,6 +9,7 @@ from vrp_engine.config import (
     MissingCredentialsError,
     Settings,
     assert_paper_only,
+    hydrate_env_from_mapping,
     require_credentials,
 )
 
@@ -94,3 +95,52 @@ def test_kelly_fraction_above_full_is_rejected():
 def test_equity_floor_must_be_a_fraction():
     with pytest.raises(ValueError):
         Settings(equity_floor_pct=1.2)
+
+
+def test_hydrate_copies_paper_keys_that_are_missing_from_the_environment():
+    env: dict[str, str] = {}
+    written = hydrate_env_from_mapping(
+        {"ALPACA_API_KEY": "pk-paper", "ALPACA_SECRET_KEY": "sk-paper"},
+        environ=env,
+    )
+    assert env["ALPACA_API_KEY"] == "pk-paper"
+    assert env["ALPACA_SECRET_KEY"] == "sk-paper"
+    assert written == ["ALPACA_API_KEY", "ALPACA_SECRET_KEY"]
+
+
+def test_hydrate_does_not_overwrite_an_existing_env_var():
+    env = {"ALPACA_API_KEY": "local-key"}
+    hydrate_env_from_mapping({"ALPACA_API_KEY": "cloud-key"}, environ=env)
+    assert env["ALPACA_API_KEY"] == "local-key"
+
+
+def test_hydrate_fills_an_empty_env_var_from_secrets():
+    env = {"ALPACA_API_KEY": ""}
+    hydrate_env_from_mapping({"ALPACA_API_KEY": "pk-paper"}, environ=env)
+    assert env["ALPACA_API_KEY"] == "pk-paper"
+
+
+def test_hydrate_ignores_empty_secret_values():
+    env: dict[str, str] = {}
+    written = hydrate_env_from_mapping({"ALPACA_API_KEY": "  "}, environ=env)
+    assert env == {}
+    assert written == []
+
+
+def test_hydrate_ignores_keys_that_are_not_safety_or_credential_flags():
+    env: dict[str, str] = {}
+    hydrate_env_from_mapping(
+        {"OPENAI_API_KEY": "sk-x", "ALPACA_API_KEY": "pk-paper", "UNIVERSE": "SPY"},
+        environ=env,
+    )
+    assert env == {"ALPACA_API_KEY": "pk-paper"}
+
+
+def test_hydrate_stringifies_boolean_streamlit_secrets():
+    env: dict[str, str] = {}
+    hydrate_env_from_mapping(
+        {"DRY_RUN": True, "ALPACA_LIVE_TRADE": False},
+        environ=env,
+    )
+    assert env["DRY_RUN"] == "True"
+    assert env["ALPACA_LIVE_TRADE"] == "False"

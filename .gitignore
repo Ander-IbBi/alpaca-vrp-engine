@@ -25,6 +25,11 @@ data/journal/*.jsonl
 logs/
 *.log
 
+# --- Local operator notes (not the public product) ---
+docs/hackathon/
+docs/explanations/
+notebooks/
+
 # --- OS / editors ---
 .DS_Store
 Thumbs.db

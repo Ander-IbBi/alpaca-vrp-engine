@@ -6,12 +6,23 @@ it hold, what is it looking at, and why did it do what it did.
 
 The page degrades instead of failing. Without API keys it still replays the decision
 journal, so a judge with no credentials sees the whole reasoning trail.
+
+This module never submits an order. Execution stays on the operator machine via
+`run-agent --execute`.
 """
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+
+# Streamlit Community Cloud installs with pip and does not run `uv sync`, so the
+# src/ layout is not on PYTHONPATH unless we add it before importing the package.
+_SRC = Path(__file__).resolve().parents[1] / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
 import pandas as pd
 import streamlit as st
@@ -30,9 +41,10 @@ from vrp_engine.config import (
     MissingCredentialsError,
     Settings,
     assert_paper_only,
+    hydrate_env_from_mapping,
     load_settings,
 )
-from vrp_engine.journal import Journal
+from vrp_engine.journal import read_entries
 from vrp_engine.risk.portfolio import (
     PortfolioRisk,
     beta_mapped_curve,
@@ -186,8 +198,17 @@ def load_live(_nonce: int) -> dict[str, Any] | None:
     }
 
 
-def journal_entries(settings: Settings) -> list[dict[str, Any]]:
-    return Journal(settings.journal_path).read_all()
+def _hydrate_streamlit_secrets() -> None:
+    """Pull paper keys out of st.secrets when running on Community Cloud."""
+    try:
+        secrets = st.secrets
+    except Exception:  # noqa: BLE001 — local runs have no secrets file
+        return
+    hydrate_env_from_mapping(secrets)
+
+
+def journal_entries(settings: Settings) -> tuple[list[dict[str, Any]], bool]:
+    return read_entries(settings.journal_path)
 
 
 # --- sections ----------------------------------------------------------------
@@ -483,15 +504,22 @@ def _render_stand_downs(scan: dict[str, Any] | None) -> None:
         )
 
 
-def render_journal(entries: list[dict[str, Any]]) -> None:
+def render_journal(entries: list[dict[str, Any]], *, from_sample: bool = False) -> None:
     st.subheader("Decision journal")
     if not entries:
         st.info("The journal is empty. Every cycle appends one JSON line here.")
         return
-    st.caption(
-        "Append-only, one JSON object per cycle. Skipped cycles are recorded too, "
-        "because the reason not to trade is part of the strategy."
-    )
+    if from_sample:
+        st.caption(
+            "Showing a recorded dry-run trail. This hosted instance has no local "
+            "journal file; the operator's agent writes that file on the machine "
+            "that runs the loop."
+        )
+    else:
+        st.caption(
+            "Append-only, one JSON object per cycle. Skipped cycles are recorded too, "
+            "because the reason not to trade is part of the strategy."
+        )
 
     for entry in reversed(entries[-25:]):
         proposal = entry.get("proposal") or {}
@@ -532,6 +560,7 @@ def render_journal(entries: list[dict[str, Any]]) -> None:
 
 
 def main() -> None:
+    _hydrate_streamlit_secrets()
     settings = load_settings()
     with st.sidebar:
         st.header("Controls")
@@ -554,7 +583,7 @@ def main() -> None:
         live = {"error": f"{type(exc).__name__}: {exc}"}
 
     render_header(settings, live)
-    entries = journal_entries(settings)
+    entries, from_sample = journal_entries(settings)
 
     if live and "error" not in live:
         st.divider()
@@ -573,7 +602,7 @@ def main() -> None:
     st.divider()
     render_scanner(entries, live if live and "error" not in live else None)
     st.divider()
-    render_journal(entries)
+    render_journal(entries, from_sample=from_sample)
 
 
 main()

@@ -7,12 +7,50 @@ paper account, and the sizing layer never has a stale absolute number to trip ov
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping, MutableMapping
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+# Streamlit Community Cloud injects these via st.secrets, not via a .env file.
+# Only credential and safety flags are copied; strategy knobs stay at their defaults.
+STREAMLIT_SECRET_ENV_KEYS = (
+    "ALPACA_API_KEY",
+    "ALPACA_SECRET_KEY",
+    "DRY_RUN",
+    "ALPACA_LIVE_TRADE",
+)
+
+
+def hydrate_env_from_mapping(
+    secrets: Mapping[str, Any],
+    *,
+    environ: MutableMapping[str, str] | None = None,
+) -> list[str]:
+    """Copy Streamlit-style secrets into the process environment.
+
+    Existing env vars win, so a local `.env` is not overwritten by Cloud secrets
+    during development. Empty values are ignored. Returns the names that were written.
+    """
+    env = os.environ if environ is None else environ
+    written: list[str] = []
+    for key in STREAMLIT_SECRET_ENV_KEYS:
+        if key not in secrets:
+            continue
+        existing = env.get(key)
+        if existing is not None and str(existing) != "":
+            continue
+        value = secrets[key]
+        if value is None or str(value).strip() == "":
+            continue
+        env[key] = str(value)
+        written.append(key)
+    return written
 
 
 class LiveTradingForbiddenError(RuntimeError):
