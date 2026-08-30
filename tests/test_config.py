@@ -9,6 +9,7 @@ from vrp_engine.config import (
     MissingCredentialsError,
     Settings,
     assert_paper_only,
+    export_credentials_to_env,
     hydrate_env_from_mapping,
     require_credentials,
 )
@@ -135,6 +136,30 @@ def test_hydrate_ignores_keys_that_are_not_safety_or_credential_flags():
         environ=env,
     )
     assert env == {"ALPACA_API_KEY": "pk-paper"}
+
+
+def test_credentials_are_exported_for_the_subprocess_planes():
+    """The CLI authenticates from the environment, and `.env` alone never reaches it."""
+    env: dict[str, str] = {}
+    written = export_credentials_to_env(
+        Settings(alpaca_api_key="pk-paper", alpaca_secret_key="sk-paper"), environ=env
+    )
+    assert env == {"ALPACA_API_KEY": "pk-paper", "ALPACA_SECRET_KEY": "sk-paper"}
+    assert written == ["ALPACA_API_KEY", "ALPACA_SECRET_KEY"]
+
+
+def test_an_existing_environment_key_is_not_overwritten():
+    env = {"ALPACA_API_KEY": "from-the-shell"}
+    export_credentials_to_env(
+        Settings(alpaca_api_key="from-dotenv", alpaca_secret_key="sk"), environ=env
+    )
+    assert env["ALPACA_API_KEY"] == "from-the-shell"
+
+
+def test_empty_credentials_are_not_exported():
+    env: dict[str, str] = {}
+    assert export_credentials_to_env(Settings(), environ=env) == []
+    assert env == {}
 
 
 def test_hydrate_stringifies_boolean_streamlit_secrets():

@@ -216,6 +216,35 @@ def assert_paper_only(settings: Settings | None = None) -> Settings:
     return loaded
 
 
+def export_credentials_to_env(
+    settings: Settings,
+    *,
+    environ: MutableMapping[str, str] | None = None,
+) -> list[str]:
+    """Publish the paper keys to the environment for the child processes that need them.
+
+    pydantic-settings reads `.env` into this process without exporting it, which is
+    right for the SDK and wrong for the verification plane: the Alpaca CLI is a
+    subprocess, it authenticates from these two variables, and without them it answers
+    401. The bridge then fails open and reports `checked=false`, so the cross-check
+    degrades into doing nothing at all while still looking healthy in the journal.
+
+    Existing values win, so a shell that already has keys set is not overwritten.
+    """
+    env = os.environ if environ is None else environ
+    written: list[str] = []
+    pairs = (
+        ("ALPACA_API_KEY", settings.alpaca_api_key),
+        ("ALPACA_SECRET_KEY", settings.alpaca_secret_key),
+    )
+    for name, value in pairs:
+        if not value or env.get(name):
+            continue
+        env[name] = value
+        written.append(name)
+    return written
+
+
 def require_credentials(settings: Settings) -> Settings:
     if not settings.has_alpaca_keys():
         raise MissingCredentialsError(

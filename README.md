@@ -184,9 +184,12 @@ agent that found nothing to do.
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --extra mcp
 cp .env.example .env        # Windows: copy .env.example .env
 ```
+
+The `mcp` extra is not strictly optional in practice: `MCP_ENABLED` defaults to true, and
+without the package the research plane fails open and quietly does nothing all week.
 
 Paste **paper** keys from the
 [Alpaca paper dashboard](https://app.alpaca.markets/paper/dashboard/overview) into `.env`.
@@ -200,7 +203,7 @@ uv run run-agent --dry-run                    # rehearse a cycle, send nothing
 uv run run-agent --loop --interval 180        # the contest loop
 uv run streamlit run app/streamlit_app.py     # dashboard (read-only; never sends orders)
 .\scripts\run-forever.ps1                     # Windows: restart-on-crash wrapper
-uv run pytest                                 # 680+ tests, no keys or network needed
+uv run pytest                                 # 700+ tests, no keys or network needed
 uv run ruff check .
 ```
 
@@ -209,8 +212,9 @@ second window running `agent-health`), and `stop-agent.cmd` ends it. It asks not
 opening it starts an agent that trades. Full walkthrough, including what happens when
 the connection drops, in [docs/running-the-agent.md](docs/running-the-agent.md).
 
-Optional extras: `uv sync --extra llm` for the analyst, `uv sync --extra mcp` for the
-research plane. Both fail open when absent.
+`uv sync --extra llm` adds the LLM analyst on top. It fails open when absent, and
+without an `OPENAI_API_KEY` the engine falls back to a rule-based analyst that approves
+whatever already cleared the risk layer.
 
 The Streamlit app never submits an order. Without API keys it still replays
 `app/fixtures/demo_journal.jsonl`. On Streamlit Community Cloud, put **paper** keys in

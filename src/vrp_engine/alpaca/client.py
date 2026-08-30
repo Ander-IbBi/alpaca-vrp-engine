@@ -12,7 +12,13 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import QueryOrderStatus
 from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
 
-from vrp_engine.config import Settings, assert_paper_only, load_settings, require_credentials
+from vrp_engine.config import (
+    Settings,
+    assert_paper_only,
+    export_credentials_to_env,
+    load_settings,
+    require_credentials,
+)
 
 # alpaca-py calls `session.request(...)` without a timeout, so a connection that dies
 # mid-flight — a laptop changing network, a router rebooting — leaves the loop blocked on
@@ -52,6 +58,9 @@ class PaperAlpaca:
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = require_credentials(assert_paper_only(settings or load_settings()))
+        # The CLI and MCP planes are subprocesses that authenticate from the
+        # environment, and `.env` alone never reaches them.
+        export_credentials_to_env(self.settings)
         # paper=True routes trading calls to paper-api.alpaca.markets.
         self.trading = TradingClient(
             api_key=self.settings.alpaca_api_key,
