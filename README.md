@@ -93,13 +93,19 @@ that has to be refused outright costs the whole cycle rather than a few contract
 | Per underlying | 12% | one symbol |
 | Index bucket (SPY, QQQ, IWM, DIA) | 30% | combined |
 | Modelled loss at a 2σ one-week shock | 18% | whole book |
-| Beta-weighted net delta | ±25% of equity | SPY-equivalent notional |
+| Beta-weighted net delta | ±100% of equity | SPY-equivalent notional |
 | Daily loss breaker | 6% | stops opening, keeps managing exits |
 | Hard equity floor | 82% of start | flatten and stand down |
 
 These are aggressive on purpose, and they are visible on purpose. Because every
 structure is defined risk, "using the capital" means collateral deployed against a known
 worst case, not an open-ended bet.
+
+The delta band is the odd one out: it is the only budget measured in directional
+notional rather than in loss, so it shapes *how* the book leans while the rows above it
+bound what a lean can cost. Set it much tighter and it quietly becomes the only budget
+that ever binds — the engine then sizes to a delta ceiling instead of to its own edge,
+and the other seven rows never get a say.
 
 ## The standout: a real portfolio payoff engine
 
@@ -243,7 +249,7 @@ knowing:
 | `ALPACA_LIVE_TRADE` | `false` | Anything truthy aborts startup |
 | `DRY_RUN` | `false` | Development escape hatch: build and validate orders without sending them |
 | `UNIVERSE` | 14 liquid names | Comma-separated; liquidity is re-checked at runtime |
-| `MIN_DTE` / `MAX_DTE` | `1` / `9` | Expiry window; theta per day is highest here |
+| `MIN_DTE` / `MAX_DTE` | `3` / `9` | Expiry window; theta per day is highest here, but the front expiry is skipped |
 | `VRP_Z_ENTRY` | `0.15` | How rich or cheap volatility must be to act |
 | `MIN_EDGE` / `MIN_WEDGE` | `0.03` / `0.02` | Expected-value gates |
 | `KELLY_FRACTION` | `0.35` | Haircut on the full Kelly stake |

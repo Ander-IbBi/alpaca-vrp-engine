@@ -97,8 +97,10 @@ class Settings(BaseSettings):
 
     # --- Expiry window ---------------------------------------------------------
     # Short-dated on purpose: theta per day is highest here, and a contest week is
-    # too short to wait on 45-day decay.
-    min_dte: int = Field(default=1, ge=0)
+    # too short to wait on 45-day decay. The front expiry is skipped all the same,
+    # because a spread one day from expiry with its short strike half a percent away
+    # is a leveraged directional bet wearing the costume of a premium sale.
+    min_dte: int = Field(default=3, ge=0)
     max_dte: int = Field(default=9, ge=1)
 
     # --- Signal thresholds -----------------------------------------------------
@@ -136,8 +138,12 @@ class Settings(BaseSettings):
     # than the theoretical worst case every spread would only reach simultaneously.
     max_stress_loss_pct: float = Field(default=0.18, gt=0, le=1.0)
     # Beta-weighted net delta, as SPY-equivalent notional over equity. The book may
-    # lean, but it may not become a naked directional bet.
-    max_net_delta_pct: float = Field(default=0.25, gt=0)
+    # lean, but it may not become a naked directional bet. One times equity sounds
+    # generous until you remember what bounds the loss: this band shapes *how* the
+    # book leans, while the max-loss, stress and breaker budgets bound what a lean
+    # can actually cost. Tighter than this and the delta band silently becomes the
+    # only budget that ever binds, which starves the sizing model of its own job.
+    max_net_delta_pct: float = Field(default=1.0, gt=0)
     max_contracts_per_order: int = Field(default=40, ge=1)
 
     # --- Account circuit breakers ---------------------------------------------
