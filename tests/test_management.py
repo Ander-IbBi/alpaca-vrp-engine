@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from conftest import NOW, TODAY, make_candidate, occ_symbol
@@ -424,6 +424,18 @@ def test_the_forced_exit_only_applies_after_its_hour():
         _credit_spread(expiration=TOMORROW, short_strike=495.0)
     )
     assert _manage(structures, now=MIDDAY, today=TODAY).trade is None
+
+
+def test_the_forced_exit_hour_is_read_in_eastern_time_not_utc():
+    """The live loop stamps cycles in UTC; 15:00 UTC is late morning in New York."""
+    structures = group_open_structures(
+        _credit_spread(expiration=TOMORROW, short_strike=495.0)
+    )
+    late_morning_et = datetime(2026, 8, 31, 15, 30, tzinfo=UTC)  # 11:30 in New York
+    assert _manage(structures, now=late_morning_et, today=TODAY).trade is None
+
+    afternoon_et = datetime(2026, 8, 31, 19, 30, tzinfo=UTC)  # 15:30 in New York
+    assert _manage(structures, now=afternoon_et, today=TODAY).trade is not None
 
 
 def test_the_safe_distance_is_two_sigma():

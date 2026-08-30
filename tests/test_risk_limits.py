@@ -202,10 +202,36 @@ def test_coverage_is_checked_per_expiry():
     assert uncovered_short_legs(proposal)
 
 
-def test_an_unparseable_symbol_is_ignored_rather_than_crashing():
+def test_an_unreadable_short_option_symbol_fails_closed():
+    """We cannot prove coverage for a symbol we cannot parse, so it counts as naked."""
     proposal = ProposedTrade(
         qty=1, legs=[ProposedLeg(symbol="NOT-AN-OPTION", side="sell")]
     )
+    assert uncovered_short_legs(proposal) == ["NOT-AN-OPTION"]
+
+
+def test_the_ticket_is_refused_rather_than_labelled_covered():
+    proposal = ProposedTrade(
+        qty=1,
+        legs=[ProposedLeg(symbol="NOT-AN-OPTION", side="sell")],
+        estimated_cost_usd=100.0,
+        max_loss_usd=100.0,
+    )
+    decision = review_proposal(proposal, LIMITS)
+    assert not decision.allowed
+    assert any("naked short blocked" in reason for reason in decision.reasons)
+
+
+def test_an_unreadable_long_leg_simply_covers_nothing():
+    proposal = ProposedTrade(
+        qty=1, legs=[ProposedLeg(symbol="NOT-AN-OPTION", side="buy")]
+    )
+    assert uncovered_short_legs(proposal) == []
+
+
+def test_selling_shares_is_not_a_naked_short():
+    """An equity ticket carries a plain ticker, which is never an OCC symbol."""
+    proposal = ProposedTrade(qty=1, kind="equity", legs=[ProposedLeg(symbol="SPY", side="sell")])
     assert uncovered_short_legs(proposal) == []
 
 

@@ -7,7 +7,8 @@
 # the next one runs. This wrapper covers the rarer case where the process itself dies,
 # so a transient crash at 10:04 does not cost the rest of the day.
 #
-# Ctrl+C twice to stop for good: once to end the child, once to end the loop.
+# Ctrl+C stops for good: the loop exits 0 on interrupt and the wrapper reads that as a
+# person asking it to stop, rather than as a crash worth restarting.
 
 param(
     [switch]$DryRun,
@@ -54,11 +55,44 @@ if ($DryRun) {
     Write-Host "Dry run: no orders will be sent. Drop -DryRun to let the agent trade." -ForegroundColor Yellow
 }
 
+# A crash is worth retrying; a loop that cannot even start is not. Counting only the
+# failures that happen within seconds separates "the network blinked" from "the keys are
+# wrong", so a permanent fault stops with an explanation instead of respawning all night.
+$FastFailSeconds = 60
+$MaxFastFailures = 5
+$fastFailures = 0
+
 try {
     while ($true) {
         Write-Host "[$(Get-Date -Format u)] starting agent loop" -ForegroundColor Green
+        $startedAt = Get-Date
         & uv @arguments
-        Write-Host "[$(Get-Date -Format u)] agent exited (code $LASTEXITCODE); restarting in 30s" -ForegroundColor Yellow
+        $code = $LASTEXITCODE
+        $ranFor = (Get-Date) - $startedAt
+
+        # The loop returns 0 only on Ctrl+C, which is a person asking it to stop.
+        if ($code -eq 0) {
+            Write-Host "[$(Get-Date -Format u)] agent stopped cleanly; not restarting." -ForegroundColor Cyan
+            break
+        }
+
+        if ($ranFor.TotalSeconds -lt $FastFailSeconds) {
+            $fastFailures++
+        } else {
+            $fastFailures = 0
+        }
+
+        if ($fastFailures -ge $MaxFastFailures) {
+            Write-Host ''
+            Write-Host "  The agent failed to start $MaxFastFailures times in a row." -ForegroundColor Red
+            Write-Host '  This is a setup problem, not a blip. Check the errors above, then:' -ForegroundColor Yellow
+            Write-Host '    uv run smoke-paper' -ForegroundColor Gray
+            Write-Host '  Giving up so it does not respawn all night.' -ForegroundColor DarkGray
+            Write-Host ''
+            break
+        }
+
+        Write-Host "[$(Get-Date -Format u)] agent exited (code $code); restarting in 30s" -ForegroundColor Yellow
         Start-Sleep -Seconds 30
     }
 }

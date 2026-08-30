@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from vrp_engine.agent.loop import VrpAgent
@@ -238,15 +239,50 @@ def run_agent() -> int:
     return 0
 
 
+# Wake a little after the bell rather than a hair before it: landing one second early
+# means `is_open` is still false and the loop goes back to sleep for another half hour.
+OPEN_WAKE_BUFFER_SECONDS = 20
+
+
+def sleep_seconds(
+    *,
+    is_open: bool,
+    interval: int,
+    now: datetime | None = None,
+    next_open: datetime | None = None,
+) -> int:
+    """How long to wait before the next cycle.
+
+    While the session is shut the loop polls lazily so an overnight `--loop` stays quiet,
+    but it must never doze through the opening bell: an agent that wakes at 09:59 has
+    already missed the first half hour of the only session it was started for.
+    """
+    if is_open:
+        return interval
+
+    idle = min(max(interval * 6, 1800), 3600)
+    if now is None or next_open is None:
+        return idle
+
+    until_open = (next_open - now).total_seconds() + OPEN_WAKE_BUFFER_SECONDS
+    if until_open <= 0:
+        return interval
+    return int(min(idle, max(until_open, interval)))
+
+
 def _sleep_seconds(agent: VrpAgent, interval: int) -> int:
-    """When the session is shut, poll less often so an overnight --loop stays quiet."""
     try:
         clock = agent.client.clock()
     except Exception:  # noqa: BLE001
         return interval
-    if clock.is_open:
-        return interval
-    return min(max(interval * 6, 1800), 3600)
+    # Alpaca stamps its own clock, which beats trusting the laptop's idea of the time.
+    now = getattr(clock, "timestamp", None) or datetime.now(UTC)
+    return sleep_seconds(
+        is_open=bool(getattr(clock, "is_open", False)),
+        interval=interval,
+        now=now,
+        next_open=getattr(clock, "next_open", None),
+    )
 
 
 def _run_loop(agent: VrpAgent, *, execute: bool, interval: int) -> int:

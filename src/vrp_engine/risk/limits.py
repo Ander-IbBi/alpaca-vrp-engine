@@ -100,6 +100,7 @@ def uncovered_short_legs(proposal: ProposedTrade) -> list[str]:
     higher strike, each short put a long put at a lower strike. Anything left over is
     a naked short and the ticket dies here.
     """
+    uncovered: list[str] = []
     by_expiry: dict[tuple[str, str], dict[str, list[tuple[str, float, str]]]] = {}
     for side in ("sell", "buy"):
         for leg in proposal.legs:
@@ -107,13 +108,18 @@ def uncovered_short_legs(proposal: ProposedTrade) -> list[str]:
                 continue
             parsed = parse_occ_symbol(leg.symbol)
             if parsed is None:
+                # A symbol we cannot read is a symbol we cannot prove is covered. On an
+                # option ticket that has to fail closed: skipping it silently would let
+                # a short leg through wearing the "every short leg is covered" label.
+                # Equity tickets are exempt, where a sell is a share sale, not a short.
+                if side == "sell" and proposal.kind == "option":
+                    uncovered.append(leg.symbol)
                 continue
             key = (parsed.option_type, parsed.expiration.isoformat())
             group = by_expiry.setdefault(key, {"sell": [], "buy": []})
             for _ in range(max(proposal.qty, 1) * leg.ratio_qty):
                 group[side].append((parsed.option_type, parsed.strike, leg.symbol))
 
-    uncovered: list[str] = []
     for (option_type, _expiry), group in by_expiry.items():
         shorts = sorted(group["sell"], key=lambda item: item[1])
         longs = sorted(group["buy"], key=lambda item: item[1])

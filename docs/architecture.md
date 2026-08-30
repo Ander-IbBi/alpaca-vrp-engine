@@ -176,7 +176,7 @@ to appear until it is deployed.
 
 ## Testing
 
-580+ tests, no network, no keys. `tests/conftest.py` holds the shared fakes: a
+700+ tests, no network, no keys. `tests/conftest.py` holds the shared fakes: a
 Black–Scholes chain builder that produces *coherent* quotes (so a test cannot accidentally
 pass on an arbitrage), synthetic price histories with a chosen volatility and trend, and
 duck-typed account, position and client stubs.

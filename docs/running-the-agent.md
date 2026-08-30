@@ -62,6 +62,9 @@ Closing the agent window by hand also works, but it tends to leave the panel run
 a stale pid file behind, which then makes the panel report a process that died minutes
 ago. The shortcut tidies up all of it.
 
+`Ctrl+C` in the agent window is also a real stop: the loop treats it as a person asking
+it to end, and the wrapper does not restart after one.
+
 ## When the connection drops
 
 The agent is built to be left alone for a week, so a network problem is a normal event
@@ -69,12 +72,15 @@ rather than a failure. Nothing needs doing at any of these layers:
 
 - **Mid-cycle.** Every API call is wrapped. A failed cycle is written to the journal
   with the reason and the next cycle runs as scheduled.
-- **A dead process.** The wrapper restarts it after 30 seconds, forever.
+- **A dead process.** The wrapper restarts it after 30 seconds. It keeps doing that all
+  week, but it stops if the loop dies five times in a row within a minute of starting,
+  because that is a setup problem no amount of retrying will fix.
 - **A sleeping machine.** The wrapper asks Windows to stay awake for as long as its
   window is open. The screen may still go dark; the request disappears when the process
   ends, so nothing is left changed on your machine.
 - **A closed market.** The loop polls far less often out of hours and never sends an
-  order, because options are day orders.
+  order, because options are day orders. It still wakes up for the opening bell: an
+  overnight wait is cut short so the first cycle of the session lands on time.
 - **No connection at start-up.** The launcher retries three times, then starts anyway
   and lets the agent join in when the line comes back.
 

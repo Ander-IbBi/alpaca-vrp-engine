@@ -34,7 +34,7 @@ The previous design (a collar overlay) is archived at
 - `app/streamlit_app.py` — Streamlit dashboard
 - `scripts/` — `smoke_paper.py`, `broker_report.py`, `run_agent.py`; console scripts
   `smoke-paper`, `scan`, `run-agent`
-- `tests/` — 580+ tests, shared fakes in `conftest.py`, **no network, no keys**
+- `tests/` — 700+ tests, shared fakes in `conftest.py`, **no network, no keys**
 - `docs/` — `strategy.md` (maths), `architecture.md`, `mcp-and-cli.md`
 
 ## Hard rules

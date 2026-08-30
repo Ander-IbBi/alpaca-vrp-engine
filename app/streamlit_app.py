@@ -831,8 +831,12 @@ def render_journal(entries: list[dict[str, Any]], *, from_sample: bool = False) 
         action = proposal.get("action", "hold")
         equity = entry.get("equity")
         title = f"{entry.get('ts', '?')} — {action}"
-        if equity:
+        # A cycle that could not read the account journals a note here rather than a
+        # number, and a red traceback in the middle of a demo is a poor way to say so.
+        if isinstance(equity, int | float):
             title += f" — equity ${float(equity):,.0f}"
+        elif equity:
+            title += f" — equity {equity}"
         with st.expander(title):
             if proposal.get("rationale"):
                 st.markdown(f"**Rationale.** {proposal['rationale']}")

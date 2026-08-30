@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
@@ -49,6 +50,19 @@ TRADING_DAYS = 252
 # "Safely out of the money" on the last day means this many standard deviations of
 # room between the spot and the nearest short strike.
 SAFE_SIGMA_DISTANCE = 2.0
+US_EASTERN = ZoneInfo("America/New_York")
+
+
+def eastern_hour(now: datetime) -> int:
+    """The hour of the trading day, whatever timezone the caller happens to think in.
+
+    The live loop stamps its cycles in UTC, so comparing `now.hour` against a setting
+    named `..._et` would fire the pin-risk exit four or five hours early — late morning
+    instead of mid-afternoon. A naive datetime is assumed to already be Eastern, which
+    is how the tests write it.
+    """
+    moment = now.astimezone(US_EASTERN) if now.tzinfo else now
+    return moment.hour
 
 
 class OpenStructure(BaseModel):
@@ -260,7 +274,7 @@ def next_management_action(
     if not structures:
         return ManagementDecision(checks=["no open structures to manage"])
 
-    forced_exit_time = now.hour >= settings.forced_exit_hour_et
+    forced_exit_time = eastern_hour(now) >= settings.forced_exit_hour_et
 
     # Losers first: a stop that fires a cycle late costs more than a profit taken late.
     for structure in sorted(structures, key=lambda s: s.capture_fraction):
