@@ -189,9 +189,26 @@ README table, $U_\bullet$ the risk already committed at that level, and BP the o
 buying power. The 0.9 factor exists because planning to use the last dollar of buying
 power means a fill a few cents worse than the mid bounces the whole ticket.
 
-Two final clips: the per-order contract cap, and a liquidity clip of
-$n \le \text{open interest} / 50$ wherever open interest is known — size beyond that is a
-fill problem dressed up as a risk problem.
+Three final clips, none of which is denominated in dollars of risk. The per-order
+contract cap; a liquidity clip of $n \le \text{open interest} / 50$ wherever open
+interest is known, because size beyond that is a fill problem dressed up as a risk
+problem; and the beta-weighted delta budget.
+
+That last one needs its own arithmetic, because it is measured in directional notional
+rather than in loss. With $\delta$ the structure's beta-weighted dollar delta per
+contract, $D$ the book's current beta-weighted delta and $B$ = `MAX_NET_DELTA_PCT`
+$\times E$ the band,
+
+$$n \le \left\lfloor \frac{B - \operatorname{sgn}(\delta)\,D}{|\delta|} \right\rfloor$$
+
+A ticket leaning the same way as the book gets only the remaining headroom; one leaning
+against it may run all the way to the far side of the band, because a correction is not
+a lean. A delta-neutral structure — which is what an iron condor is for — has no ceiling
+here at all.
+
+The delta budget is enforced again in `risk/limits.py`, but by the time it gets there it
+should never bind: clipping the size beforehand is what stops a candidate that leans too
+hard from killing the whole cycle instead of simply arriving smaller.
 
 **Which constraint bound the size is recorded on the ticket.** That single field is what
 makes the sizing auditable: anyone reading the journal can reconstruct the arithmetic

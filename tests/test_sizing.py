@@ -15,6 +15,7 @@ from vrp_engine.strategy.sizing import (
     BUYING_POWER_UTILISATION,
     OPEN_INTEREST_DIVISOR,
     RiskBudget,
+    delta_cap,
     size_structure,
 )
 from vrp_engine.strategy.structures import SelectionParams, credit_spread_variants
@@ -73,6 +74,7 @@ def _size(budget: RiskBudget, exposure: Exposure | None = None, **kwargs):
         exposure=exposure or Exposure(),
         bucket=kwargs.pop("bucket", "index"),
         options_buying_power=kwargs.pop("options_buying_power", GENEROUS),
+        **kwargs,
     )
 
 
@@ -85,6 +87,7 @@ def test_budget_resolves_percentages_into_dollars():
     assert budget.trade_cap_usd == pytest.approx(4_500.0)
     assert budget.underlying_cap_usd == pytest.approx(12_000.0)
     assert budget.bucket_cap_usd == pytest.approx(30_000.0)
+    assert budget.net_delta_cap_usd == pytest.approx(25_000.0)
 
 
 def test_budget_from_settings_uses_the_configured_percentages():
@@ -107,6 +110,66 @@ def test_negative_equity_is_clamped_to_zero():
     )
     assert budget.equity == 0.0
     assert budget.aggregate_cap_usd == 0.0
+
+
+# --- the delta ceiling ------------------------------------------------------
+#
+# Denominated in directional notional rather than in dollars of risk, so it is applied
+# as its own clip rather than through the headroom dictionary.
+
+
+def test_a_flat_book_may_lean_the_full_budget_either_way():
+    assert delta_cap(per_contract_delta_usd=1_000.0, book_delta_usd=0.0, budget_usd=25_000.0) == 25
+    assert (
+        delta_cap(per_contract_delta_usd=-1_000.0, book_delta_usd=0.0, budget_usd=25_000.0) == 25
+    )
+
+
+def test_leaning_further_the_same_way_only_gets_the_remaining_room():
+    assert (
+        delta_cap(per_contract_delta_usd=1_000.0, book_delta_usd=20_000.0, budget_usd=25_000.0)
+        == 5
+    )
+
+
+def test_leaning_against_the_book_may_cross_all_the_way_to_the_far_side():
+    """A correction is not a lean, so it gets the whole band rather than the remainder."""
+    assert (
+        delta_cap(per_contract_delta_usd=-1_000.0, book_delta_usd=20_000.0, budget_usd=25_000.0)
+        == 45
+    )
+
+
+def test_a_book_already_outside_the_budget_cannot_lean_further():
+    assert (
+        delta_cap(per_contract_delta_usd=1_000.0, book_delta_usd=30_000.0, budget_usd=25_000.0)
+        == 0
+    )
+
+
+def test_a_delta_neutral_structure_has_no_delta_ceiling():
+    """An iron condor is built to be flat; the delta budget has nothing to say about it."""
+    assert delta_cap(per_contract_delta_usd=0.0, book_delta_usd=0.0, budget_usd=25_000.0) is None
+
+
+def test_the_delta_budget_shrinks_the_ticket_instead_of_killing_it():
+    """It used to be a veto in the risk layer only, so a lean cost the whole cycle."""
+    wide = _size(_budget(kelly_haircut=1.0, max_trade_loss_pct=1.0))
+    clipped = _size(
+        _budget(kelly_haircut=1.0, max_trade_loss_pct=1.0),
+        per_contract_delta_usd=5_000.0,
+    )
+    assert clipped.contracts == 5
+    assert clipped.contracts < wide.contracts
+    assert clipped.binding_constraint == "net delta budget"
+    assert any("beta-weighted delta" in note for note in clipped.notes)
+
+
+def test_a_delta_neutral_ticket_is_not_clipped():
+    plain = _size(_budget())
+    neutral = _size(_budget(), per_contract_delta_usd=0.0)
+    assert neutral.contracts == plain.contracts
+    assert neutral.binding_constraint == plain.binding_constraint
 
 
 # --- the clipping chain -----------------------------------------------------

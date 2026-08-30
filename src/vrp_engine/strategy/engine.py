@@ -507,6 +507,11 @@ class VrpEngine:
         exposure = (
             context.portfolio.exposure if context.portfolio is not None else None
         )
+        book_delta = (
+            context.portfolio.beta_weighted_delta_usd
+            if context.portfolio is not None
+            else 0.0
+        )
         params = self._params()
 
         attempts = 0
@@ -529,6 +534,13 @@ class VrpEngine:
                 exposure=exposure or Exposure(),
                 bucket=self.settings.bucket_of(row.underlying),
                 options_buying_power=context.options_buying_power,
+                # Beta-weighted, because that is the currency the delta budget is
+                # denominated in: a QQQ lean is not the same size as a SPY one.
+                per_contract_delta_usd=(
+                    self._structure_delta_usd(evaluation.structure, spot=signal.spot)
+                    * signal.beta
+                ),
+                book_delta_usd=book_delta,
             )
             if sizing.sizable:
                 return structure_to_proposal(evaluation, sizing, signal)

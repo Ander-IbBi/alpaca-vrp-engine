@@ -44,6 +44,7 @@ class RiskBudget(BaseModel):
     max_underlying_loss_pct: float
     max_bucket_loss_pct: float
     max_contracts_per_order: int
+    max_net_delta_pct: float = 0.25
 
     @classmethod
     def from_settings(cls, settings: Settings, *, equity: float) -> RiskBudget:
@@ -55,6 +56,7 @@ class RiskBudget(BaseModel):
             max_underlying_loss_pct=settings.max_underlying_loss_pct,
             max_bucket_loss_pct=settings.max_bucket_loss_pct,
             max_contracts_per_order=settings.max_contracts_per_order,
+            max_net_delta_pct=settings.max_net_delta_pct,
         )
 
     @property
@@ -72,6 +74,11 @@ class RiskBudget(BaseModel):
     @property
     def bucket_cap_usd(self) -> float:
         return self.equity * self.max_bucket_loss_pct
+
+    @property
+    def net_delta_cap_usd(self) -> float:
+        """Beta-weighted directional notional the whole book may carry, either way."""
+        return self.equity * self.max_net_delta_pct
 
 
 class SizingResult(BaseModel):
@@ -109,6 +116,33 @@ def _liquidity_cap(evaluation: StructureEvaluation) -> int | None:
     return min(caps) if caps else None
 
 
+def delta_cap(
+    *,
+    per_contract_delta_usd: float,
+    book_delta_usd: float,
+    budget_usd: float,
+) -> int | None:
+    """Contracts that still fit inside the beta-weighted net delta budget.
+
+    The other ceilings are denominated in dollars of risk; this one is denominated in
+    dollars of directional notional, so it cannot share the headroom dictionary and
+    gets applied as its own clip.
+
+    Direction matters. A ticket that leans the same way as the book eats the remaining
+    headroom, while one that leans against it may run all the way to the far side of
+    the band before it becomes a lean of its own. Returns None when the structure is
+    delta-neutral, which is the case an iron condor is built to be.
+    """
+    if per_contract_delta_usd == 0.0:
+        return None
+    room = (
+        budget_usd - book_delta_usd
+        if per_contract_delta_usd > 0
+        else budget_usd + book_delta_usd
+    )
+    return max(int(max(room, 0.0) // abs(per_contract_delta_usd)), 0)
+
+
 def size_structure(
     evaluation: StructureEvaluation,
     *,
@@ -116,6 +150,8 @@ def size_structure(
     exposure: Exposure,
     bucket: str,
     options_buying_power: float,
+    per_contract_delta_usd: float | None = None,
+    book_delta_usd: float = 0.0,
 ) -> SizingResult:
     """Turn an edge into a contract count, cutting by each budget in turn."""
     per_contract = evaluation.max_loss_usd
@@ -156,6 +192,22 @@ def size_structure(
     if contracts > budget.max_contracts_per_order:
         contracts = budget.max_contracts_per_order
         binding = "per-order contract cap"
+
+    # The delta budget used to live only in the risk layer, where it could reject a
+    # ticket but never shrink one, so a candidate that leaned too hard killed the whole
+    # cycle instead of arriving one size smaller.
+    if per_contract_delta_usd is not None:
+        delta_room = delta_cap(
+            per_contract_delta_usd=per_contract_delta_usd,
+            book_delta_usd=book_delta_usd,
+            budget_usd=budget.net_delta_cap_usd,
+        )
+        if delta_room is not None and contracts > delta_room:
+            contracts = delta_room
+            binding = "net delta budget"
+            notes.append(
+                f"beta-weighted delta limits the ticket to {delta_room} contract(s)"
+            )
 
     liquidity = _liquidity_cap(evaluation)
     if liquidity is not None and contracts > liquidity:
