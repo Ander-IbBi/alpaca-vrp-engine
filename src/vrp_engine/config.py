@@ -182,6 +182,11 @@ class Settings(BaseSettings):
     # --- Optional LLM analyst -------------------------------------------------
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
+    # The SDK ships a 600s read timeout and retries twice, so one unlucky call could
+    # block a 180s cycle for half an hour. The analyst is an opinion, not a dependency:
+    # if it cannot answer in a few seconds the cycle is better off without it.
+    openai_timeout_seconds: float = Field(default=20.0, gt=0)
+    openai_max_retries: int = Field(default=1, ge=0)
 
     journal_path: Path = PROJECT_ROOT / "data" / "journal" / "agent.jsonl"
 

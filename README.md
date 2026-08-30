@@ -152,7 +152,8 @@ already-approved ticket and may raise a **soft veto** on one of five fixed reaso
 (`stale_quote`, `duplicate`, `wide_spread`, `event_risk`, `illiquid`). It cannot change a
 strike, resize a position, approve something risk rejected, or invent a veto reason. A
 hallucinated veto is discarded and any failure fails open, so the unattended loop keeps
-running.
+running. Its call is bounded by `OPENAI_TIMEOUT_SECONDS`, well under one cycle: an
+opinion that arrives late is worth less than a cycle that runs on time.
 
 ## Safety
 

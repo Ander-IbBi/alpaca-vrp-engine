@@ -129,7 +129,13 @@ class OpenAIAnalyst:
     def __init__(self, settings: Settings) -> None:
         from openai import OpenAI  # imported lazily so the base install stays small
 
-        self.client = OpenAI(api_key=settings.openai_api_key)
+        # Bounded on purpose: `safe_review` turns a timeout into an approval, so a slow
+        # analyst costs one opinion, while an unbounded one costs the whole session.
+        self.client = OpenAI(
+            api_key=settings.openai_api_key,
+            timeout=settings.openai_timeout_seconds,
+            max_retries=settings.openai_max_retries,
+        )
         self.model = settings.openai_model
 
     def _complete(self, system: str, user: str) -> str:
@@ -153,12 +159,13 @@ class OpenAIAnalyst:
 
 
 def build_analyst(settings: Settings) -> Analyst:
-    if settings.openai_api_key:
-        try:
-            return OpenAIAnalyst(settings)
-        except ImportError:
-            return RuleBasedAnalyst()
-    return RuleBasedAnalyst()
+    """Prefer the LLM, but never let its absence or misconfiguration stop a cycle."""
+    if not settings.openai_api_key:
+        return RuleBasedAnalyst()
+    try:
+        return OpenAIAnalyst(settings)
+    except Exception:  # noqa: BLE001 — a missing extra or a malformed key is not fatal
+        return RuleBasedAnalyst()
 
 
 def safe_review(

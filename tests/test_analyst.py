@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 
 from vrp_engine.agent.analyst import (
     SOFT_VETO_REASONS,
     AnalystReview,
+    OpenAIAnalyst,
     RuleBasedAnalyst,
     build_analyst,
     parse_analyst_review,
@@ -144,6 +147,40 @@ def test_the_rule_based_analyst_briefs_honestly():
 def test_without_an_api_key_the_rule_based_analyst_is_built():
     settings = Settings(alpaca_api_key="k", alpaca_secret_key="s", openai_api_key="")
     assert isinstance(build_analyst(settings), RuleBasedAnalyst)
+
+
+def test_an_unbuildable_llm_analyst_falls_back_instead_of_crashing(monkeypatch):
+    """A missing extra or a malformed key must not take the whole loop down at startup."""
+
+    def explode(_settings):
+        raise RuntimeError("no transport")
+
+    monkeypatch.setattr("vrp_engine.agent.analyst.OpenAIAnalyst", explode)
+    settings = Settings(alpaca_api_key="k", alpaca_secret_key="s", openai_api_key="sk-test")
+    assert isinstance(build_analyst(settings), RuleBasedAnalyst)
+
+
+def test_the_llm_client_is_built_with_a_bounded_timeout(monkeypatch):
+    """The SDK default is a 600s read with two retries, longer than the cycle itself."""
+    captured: dict[str, object] = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    settings = Settings(
+        alpaca_api_key="k",
+        alpaca_secret_key="s",
+        openai_api_key="sk-test",
+        openai_timeout_seconds=7.5,
+        openai_max_retries=0,
+    )
+    analyst = build_analyst(settings)
+
+    assert isinstance(analyst, OpenAIAnalyst)
+    assert captured["timeout"] == 7.5
+    assert captured["max_retries"] == 0
 
 
 # --- failing open -----------------------------------------------------------
