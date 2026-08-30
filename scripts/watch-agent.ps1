@@ -76,7 +76,12 @@ while ($true) {
     }
 
     Write-Host ''
-    Write-Host "    refreshing every ${Every}s. Ctrl+C to close this panel;" -ForegroundColor DarkGray
-    Write-Host '    the agent keeps running in the other window.' -ForegroundColor DarkGray
+    if ($null -ne $state -and $state.verdict -eq 'stale') {
+        Write-Host '    Red means it is not trading. Double-click stop-agent.cmd to tidy up,' -ForegroundColor Yellow
+        Write-Host '    then start-agent.cmd to start it again.' -ForegroundColor Yellow
+    } else {
+        Write-Host '    To stop the agent: double-click stop-agent.cmd' -ForegroundColor DarkGray
+    }
+    Write-Host "    This panel refreshes every ${Every}s; closing it changes nothing." -ForegroundColor DarkGray
     Start-Sleep -Seconds $Every
 }

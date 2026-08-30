@@ -180,8 +180,8 @@ uv run ruff check .
 ```
 
 Windows note: `start-agent.cmd` double-clicks into the same loop (preflight, type
-`EXECUTE` to send, second window with `agent-health`). Optional; the commands above
-are enough.
+`EXECUTE` to send, second window with `agent-health`), and `stop-agent.cmd` ends it.
+Optional; the commands above are enough.
 
 Optional extras: `uv sync --extra llm` for the analyst, `uv sync --extra mcp` for the
 research plane. Both fail open when absent.

@@ -2,9 +2,10 @@
 # then hand off to the restart-on-crash wrapper with a watcher window beside it.
 #
 #   double-click start-agent.cmd                    # the normal way in
+#   double-click stop-agent.cmd                     # the way out
 #   .\scripts\start-agent.ps1                       # same thing from a terminal
 #   .\scripts\start-agent.ps1 -Execute              # announce EXECUTE instead of asking
-#   .\scripts\start-agent.ps1 -Execute -Unattended  # what the Windows startup entry runs
+#   .\scripts\start-agent.ps1 -Execute -Unattended  # never asks; for a scheduled start
 #   .\scripts\start-agent.ps1 -NoWatcher            # no second window
 #
 # Trading is never silent. Without -Execute you have to type EXECUTE in capitals; with
@@ -108,6 +109,35 @@ Write-Host '  VRP Engine launcher' -ForegroundColor Cyan
 Write-Host "  $repo" -ForegroundColor DarkGray
 Write-Host ''
 
+# --- Is one already running? -------------------------------------------------
+#
+# Two loops against the same account would each propose against a book the other is
+# changing underneath it. Refuse rather than let that happen quietly.
+
+$pidFile = Join-Path $repo 'data\agent.pid'
+$alreadyRunning = $null
+if (Test-Path $pidFile) {
+    $recorded = 0
+    $raw = (Get-Content $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ([int]::TryParse(("$raw").Trim(), [ref]$recorded) -and $recorded -gt 0) {
+        if (Get-Process -Id $recorded -ErrorAction SilentlyContinue) {
+            $alreadyRunning = $recorded
+        }
+    }
+    if (-not $alreadyRunning) {
+        # A hard kill or a power cut leaves the file behind. Clearing it here is what
+        # stops the panel from reporting a process that died days ago.
+        Remove-Item $pidFile -ErrorAction SilentlyContinue
+    }
+}
+
+if ($alreadyRunning) {
+    Write-Host "  An agent is already running (pid $alreadyRunning)." -ForegroundColor Yellow
+    Write-Host '  Double-click stop-agent.cmd first if you want to restart it.' -ForegroundColor DarkGray
+    Write-Host ''
+    exit 0
+}
+
 # --- Preflight: fail here, with advice, rather than inside a stack trace ------
 
 Write-Host '  [1/3] uv on PATH        ' -NoNewline
@@ -166,13 +196,18 @@ if ($live) {
     }
 } else {
     Write-Host ''
-    Write-Host '  Type EXECUTE to send real orders to the paper account.' -ForegroundColor Yellow
-    Write-Host "  Anything else, or $ConfirmSeconds seconds of silence, starts a dry run." -ForegroundColor DarkGray
+    Write-Host '  What should it do?' -ForegroundColor Cyan
     Write-Host ''
-    Write-Host '  mode: ' -NoNewline
+    Write-Host '    [Enter]   Dry run - decide and journal, send nothing' -NoNewline
+    Write-Host '   (safe default)' -ForegroundColor DarkGray
+    Write-Host '    EXECUTE   Send real tickets to the Alpaca paper account' -ForegroundColor Yellow
+    Write-Host ''
+    Write-Host '  > ' -NoNewline
     $answer = Read-Answer $ConfirmSeconds
     Write-Host ''
-    $live = ($answer.Trim() -ceq 'EXECUTE')
+    # Read-Host hands back $null when there is no console to read from, and a launcher
+    # must never fall over on the question that keeps it from trading by accident.
+    $live = (("$answer").Trim() -ceq 'EXECUTE')
 }
 
 Write-Host ''
@@ -182,7 +217,7 @@ if ($live) {
     Write-Host '  DRY RUN: the engine will decide and journal, but send nothing.' -ForegroundColor Yellow
 }
 Write-Host "  Cadence: one cycle every ${Interval}s while the market is open." -ForegroundColor DarkGray
-Write-Host '  Leave this window open. Closing it stops the agent.' -ForegroundColor DarkGray
+Write-Host '  To stop: double-click stop-agent.cmd (or just close this window).' -ForegroundColor DarkGray
 Write-Host ''
 
 # --- The watcher window ------------------------------------------------------
