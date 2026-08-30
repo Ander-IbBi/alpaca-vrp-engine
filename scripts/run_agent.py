@@ -1,4 +1,4 @@
-"""Run one agent cycle from a checkout: `python scripts/run_agent.py [--execute]`."""
+"""Run one agent cycle from a checkout: `python scripts/run_agent.py [--dry-run]`."""
 
 from __future__ import annotations
 

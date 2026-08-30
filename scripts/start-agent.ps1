@@ -1,26 +1,30 @@
-# Start the agent for the day: check the machine is ready, choose the mode out loud,
-# then hand off to the restart-on-crash wrapper with a watcher window beside it.
+# Start the agent for the day: check the machine is ready, then hand off to the
+# restart-on-crash wrapper with a watcher window beside it.
 #
-#   double-click start-agent.cmd                    # the normal way in
-#   double-click stop-agent.cmd                     # the way out
-#   .\scripts\start-agent.ps1                       # same thing from a terminal
-#   .\scripts\start-agent.ps1 -Execute              # announce EXECUTE instead of asking
-#   .\scripts\start-agent.ps1 -Execute -Unattended  # never asks; for a scheduled start
-#   .\scripts\start-agent.ps1 -NoWatcher            # no second window
+#   double-click start-agent.cmd            # the normal way in
+#   double-click stop-agent.cmd             # the way out
+#   .\scripts\start-agent.ps1               # same thing from a terminal
+#   .\scripts\start-agent.ps1 -Unattended   # start even if Alpaca rejects the keys
+#   .\scripts\start-agent.ps1 -DryRun       # rehearse only; for development
+#   .\scripts\start-agent.ps1 -NoWatcher    # no second window
 #
-# Trading is never silent. Without -Execute you have to type EXECUTE in capitals; with
-# it, the mode is announced and a countdown lets any keypress back out into a dry run.
-# Either way nobody trades without having been told, which is the point.
+# Switching it on is the decision to trade. There is no mode question and no
+# confirmation: from here the agent opens, manages and closes positions on its own
+# judgement, and does nothing when it sees nothing worth doing. That call is the
+# strategy's and the risk layer's, never the operator's.
 
 param(
-    [switch]$Execute,
+    [switch]$DryRun,
     [switch]$Unattended,
     [switch]$NoWatcher,
+    # Executing is the default now. Accepted and ignored so an older desktop shortcut
+    # or scheduled task does not fail on an unknown parameter.
+    [switch]$Execute,
     [int]$Interval = 180,
-    [int]$ConfirmSeconds = 20,
-    [int]$ExecuteCountdown = 10,
-    [int]$PreflightRetries = 10,
-    [int]$RetryDelay = 20
+    # Short on purpose: an unreachable account no longer blocks the start, so there is
+    # nothing to gain by making you watch a three-minute countdown at the open.
+    [int]$PreflightRetries = 3,
+    [int]$RetryDelay = 10
 )
 
 $repo = Split-Path -Parent $PSScriptRoot
@@ -46,62 +50,11 @@ function Get-FailureReason($output) {
     return (($lines | Where-Object { $_ -match '\S' } | Select-Object -Last 1)).Trim()
 }
 
-function Read-Answer([int]$seconds) {
-    # Read-Host cannot time out, and a launcher that blocks forever on a question is a
-    # launcher you cannot leave alone. Poll the console instead, and fall back to a
-    # plain prompt when stdin is not a real console (a scheduled task, a pipe).
-    try {
-        $null = [Console]::KeyAvailable
-    } catch {
-        return (Read-Host '  mode')
-    }
-
-    $deadline = (Get-Date).AddSeconds($seconds)
-    $typed = ''
-    while ((Get-Date) -lt $deadline) {
-        if ([Console]::KeyAvailable) {
-            $key = [Console]::ReadKey($true)
-            if ($key.Key -eq 'Enter') { return $typed }
-            if ($key.Key -eq 'Backspace') {
-                if ($typed.Length -gt 0) {
-                    $typed = $typed.Substring(0, $typed.Length - 1)
-                    Write-Host -NoNewline "`b `b"
-                }
-                continue
-            }
-            $typed += $key.KeyChar
-            Write-Host -NoNewline $key.KeyChar
-        } else {
-            Start-Sleep -Milliseconds 100
-        }
-    }
-    return $typed
-}
-
-function Test-AbortRequested([int]$seconds, [string]$prompt) {
-    # The mirror image of Read-Answer: the mode is already decided, and the countdown
-    # is the window in which you can change your mind. No console, no countdown — an
-    # unattended start is exactly the case that must not stall here.
-    try {
-        while ([Console]::KeyAvailable) { [void][Console]::ReadKey($true) }
-    } catch {
-        Start-Sleep -Seconds $seconds
-        return $false
-    }
-
-    for ($left = $seconds; $left -gt 0; $left--) {
-        Write-Host ("`r  $prompt $left s  ") -NoNewline -ForegroundColor Yellow
-        for ($tick = 0; $tick -lt 10; $tick++) {
-            if ([Console]::KeyAvailable) {
-                [void][Console]::ReadKey($true)
-                Write-Host ''
-                return $true
-            }
-            Start-Sleep -Milliseconds 100
-        }
-    }
-    Write-Host ''
-    return $false
+function Test-CredentialFailure($output) {
+    # The one distinction that matters at start-up: a broken line heals by itself and a
+    # wrong key never does. Waiting out a rejected key wastes the session; refusing to
+    # start over a flaky connection wastes it just as thoroughly.
+    return (($output | Out-String) -match '(401|403|[Uu]nauthorized|[Ff]orbidden|invalid.*key|ALPACA_API_KEY)')
 }
 
 Write-Host ''
@@ -176,45 +129,29 @@ if ($reached) {
     Write-Host ''
     Write-Host "  $(Get-FailureReason $smoke)" -ForegroundColor DarkGray
     Write-Host "  Full output: $log" -ForegroundColor DarkGray
-    if (-not $Unattended) {
-        Stop-WithAdvice 'The paper account never answered. Check your connection and the keys in .env, then try again.'
+
+    if ((Test-CredentialFailure $smoke) -and -not $Unattended) {
+        Stop-WithAdvice 'Alpaca rejected those keys. Paste your paper keys into .env from https://app.alpaca.markets/paper/dashboard/overview, then open this launcher again.'
     }
-    # Unattended, carrying on is strictly better than giving up: the wrapper retries the
-    # loop every 30 s forever, so the agent joins in by itself the moment the line is back.
-    Write-Host '  The account is unreachable, but starting anyway: the wrapper keeps' -ForegroundColor Yellow
-    Write-Host '  retrying, so the agent picks up as soon as the connection returns.' -ForegroundColor Yellow
+
+    # Anything else reads as a connection problem, and giving up on one is the expensive
+    # mistake: the loop survives API faults cycle by cycle and the wrapper restarts the
+    # process if it ever dies, so the agent joins in by itself when the line comes back.
+    Write-Host '  Cannot reach Alpaca right now. Starting anyway - the agent retries on' -ForegroundColor Yellow
+    Write-Host '  its own and picks up as soon as the connection returns.' -ForegroundColor Yellow
 }
 
-# --- Mode: dry run unless you say otherwise, in capitals ---------------------
+# --- Mode: it trades, because that is what switching it on means -------------
 
-$live = $Execute.IsPresent
-if ($live) {
-    Write-Host ''
-    if (Test-AbortRequested $ExecuteCountdown 'EXECUTE requested. Any key switches to a dry run -') {
-        $live = $false
-        Write-Host '  Backed out. Dry run it is.' -ForegroundColor Yellow
-    }
-} else {
-    Write-Host ''
-    Write-Host '  What should it do?' -ForegroundColor Cyan
-    Write-Host ''
-    Write-Host '    [Enter]   Dry run - decide and journal, send nothing' -NoNewline
-    Write-Host '   (safe default)' -ForegroundColor DarkGray
-    Write-Host '    EXECUTE   Send real tickets to the Alpaca paper account' -ForegroundColor Yellow
-    Write-Host ''
-    Write-Host '  > ' -NoNewline
-    $answer = Read-Answer $ConfirmSeconds
-    Write-Host ''
-    # Read-Host hands back $null when there is no console to read from, and a launcher
-    # must never fall over on the question that keeps it from trading by accident.
-    $live = (("$answer").Trim() -ceq 'EXECUTE')
-}
+$dry = $DryRun.IsPresent
 
 Write-Host ''
-if ($live) {
-    Write-Host '  EXECUTE: tickets will be sent to the Alpaca paper account.' -ForegroundColor Green
-} else {
+if ($dry) {
     Write-Host '  DRY RUN: the engine will decide and journal, but send nothing.' -ForegroundColor Yellow
+    Write-Host '  Development mode. Drop -DryRun to let the agent trade.' -ForegroundColor DarkGray
+} else {
+    Write-Host '  AUTONOMOUS: approved tickets go straight to the Alpaca paper account.' -ForegroundColor Green
+    Write-Host '  Nothing will ask you to confirm a trade, now or later.' -ForegroundColor DarkGray
 }
 Write-Host "  Cadence: one cycle every ${Interval}s while the market is open." -ForegroundColor DarkGray
 Write-Host '  To stop: double-click stop-agent.cmd (or just close this window).' -ForegroundColor DarkGray
@@ -236,4 +173,4 @@ if (-not $NoWatcher) {
 
 # --- Hand off to the wrapper, which already knows how to restart -------------
 
-& (Join-Path $PSScriptRoot 'run-forever.ps1') -Execute:$live -Interval $Interval
+& (Join-Path $PSScriptRoot 'run-forever.ps1') -DryRun:$dry -Interval $Interval

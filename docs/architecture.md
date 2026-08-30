@@ -63,8 +63,9 @@ observe -> guard -> signals -> portfolio -> propose -> risk
 9. **Analyst** — an LLM sees the finished ticket and may raise a soft veto from a fixed
    list. Fails open.
 10. **Verify** — the CLI reads the book one last time. Disagreement stops the trade.
-11. **Execute** — `submit_proposal`, dry-run unless `DRY_RUN=false` *and* the session is
-    open.
+11. **Execute** — `submit_proposal` sends the ticket, with no approval step in front of
+    it. The only conditions are that the session is open (options are day orders) and
+    that nobody asked for a rehearsal with `--dry-run` / `DRY_RUN=true`.
 12. **Reconcile** — the CLI reads the book again. A divergence freezes new entries; exits
     stay allowed, because a safety check must never trap the book it fired over.
 13. **Journal** — the whole `AgentCycle` as one JSONL line.

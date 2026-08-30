@@ -46,7 +46,10 @@ The previous design (a collar overlay) is archived at
 - An MLeg order is accepted only if every leg is covered inside that ticket, so exits are
   their own all-`*_to_close` ticket. No single-ticket rolls, no equity leg in an MLeg.
 - MCP is read-only, enforced by the `READ_ONLY_TOOLS` allow-list in code.
-- `DRY_RUN=true` by default; executing requires explicit intent.
+- **Autonomous by default.** Starting the loop is the only decision an operator makes:
+  no approval step, no confirmation prompt, no operator veto on a ticket. `DRY_RUN`
+  defaults to false and exists only to rehearse a cycle during development; the active
+  mode is printed at startup so a rehearsal is never silent.
 - Everything under `strategy/` except `engine.py` stays a pure function of data.
 
 ## Conventions

@@ -19,8 +19,12 @@ none may be added.
   expiry inside the same ticket, and `review_proposal` proves it from the legs rather than
   trusting the ticket's label.
 - The MCP research plane stays read-only: keep the `READ_ONLY_TOOLS` allow-list enforced
-  in code, never in a prompt.
-- `DRY_RUN` defaults to true; executing must be an explicit, visible choice.
+ in code, never in a prompt.
+- The agent is autonomous. `DRY_RUN` defaults to false, and no approval step, countdown
+ or interactive mode question may sit between `review_proposal` and `submit_order`. A
+ trade is stopped by a budget, a breaker or a failed cross-check, never by a person.
+ `DRY_RUN=true` is a development rehearsal, and the active mode is printed at startup so
+ a silent dry run cannot eat a session.
 
 ## Before calling work done
 - `uv run pytest`

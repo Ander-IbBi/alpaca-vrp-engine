@@ -488,7 +488,16 @@ def test_a_closed_market_never_sends_a_day_order(wired, tmp_path):
     assert any("Market closed" in note for note in cycle.notes)
 
 
-def test_the_dry_run_setting_is_the_default(wired, tmp_path):
+def test_a_cycle_with_no_mode_argument_trades(wired, tmp_path):
+    """Nobody passes execute=True in production: the loop just runs and it trades."""
+    settings = _settings(tmp_path, dry_run=False)
+    client = _client(settings)
+    cycle = _agent(settings, client).run_once()
+    assert cycle.execution["submitted"] is True
+    assert len(client.trading.submitted) == 1
+
+
+def test_the_dry_run_setting_holds_the_ticket_back(wired, tmp_path):
     settings = _settings(tmp_path, dry_run=True)
     client = _client(settings)
     _agent(settings, client).run_once()

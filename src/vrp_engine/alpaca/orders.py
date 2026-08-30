@@ -118,7 +118,9 @@ def submit_proposal(
     client: PaperAlpaca,
     proposal: ProposedTrade,
     *,
-    dry_run: bool = True,
+    # Required on purpose. A default here would be an invisible gate: whichever way it
+    # leaned, a caller that forgot to pass it would get a mode nobody chose.
+    dry_run: bool,
 ) -> dict[str, Any]:
     """Send the ticket to the paper account, or describe exactly what would be sent."""
     request = build_order_request(proposal)

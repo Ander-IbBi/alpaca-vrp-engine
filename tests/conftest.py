@@ -346,7 +346,7 @@ class FakeAlpaca:
 def isolated_environment(monkeypatch) -> None:
     """Keep the developer's own `.env` and shell out of every test.
 
-    `Settings` reads `.env` by design, so without this a local `DRY_RUN=false` or a
+    `Settings` reads `.env` by design, so without this a local `DRY_RUN=true` or a
     custom universe would silently change what the suite asserts.
     """
     monkeypatch.setitem(Settings.model_config, "env_file", None)

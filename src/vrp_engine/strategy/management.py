@@ -170,7 +170,11 @@ def build_exit(
     reason: str,
     today: date,
 ) -> ProposedTrade:
-    """An all-legs-to-close ticket for the whole structure."""
+    """An all-legs-to-close ticket for the whole structure.
+
+    No liquidity gate here, unlike entries. A position that has gone wide is exactly
+    the one worth closing, and refusing to quote it would trap the book.
+    """
     legs = [
         ProposedLeg(
             symbol=leg.symbol,

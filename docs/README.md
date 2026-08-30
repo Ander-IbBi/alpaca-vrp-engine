@@ -9,6 +9,8 @@ The root [README](../README.md) is the entry point. This folder is the detail be
   the module map, and where to change what
 - [**MCP and CLI**](mcp-and-cli.md) — what each Alpaca surface does, and why only one of
   them can place an order
+- [**Running the agent**](running-the-agent.md) — the two Windows shortcuts, the health
+  panel, and what happens when the connection drops
 - [Sources](sources.md) — Alpaca docs, options mechanics, and the theory the engine uses
 
 The previous strategy — a defined-risk collar overlay — is a separate project:

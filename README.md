@@ -80,9 +80,11 @@ is in [docs/strategy.md](docs/strategy.md).
 
 A stake starts as a fractional-Kelly bet on the modelled edge and is then cut by every
 budget that applies, in order — per trade, per underlying, per correlation bucket,
-remaining aggregate budget, options buying power, per-order contract cap, and a
-liquidity clip against open interest where it is known. The binding constraint is
-recorded on every ticket, so no size in the journal is ever a hunch.
+remaining aggregate budget, options buying power, per-order contract cap, the
+beta-weighted delta band, and a liquidity clip against open interest where it is known.
+The binding constraint is recorded on every ticket, so no size in the journal is ever a
+hunch. Every budget shapes the size; none of them is only a veto, because a candidate
+that has to be refused outright costs the whole cycle rather than a few contracts.
 
 | Budget | Default | Scope |
 | --- | --- | --- |
@@ -149,10 +151,27 @@ running.
 ## Safety
 
 This project has **no live-trading code path**. `TradingClient` is always built with
-`paper=True`, and the process refuses to start if `ALPACA_LIVE_TRADE=true`. Orders are
-dry-run until `DRY_RUN=false`. Naked short options are structurally impossible: every
-short leg must be paired with a protective long leg in the same ticket, and
-`review_proposal` proves it rather than trusting the label on the ticket.
+`paper=True`, and the process refuses to start if `ALPACA_LIVE_TRADE=true`. Naked short
+options are structurally impossible: every short leg must be paired with a protective
+long leg in the same ticket, and `review_proposal` proves it rather than trusting the
+label on the ticket.
+
+Safety here means bounded loss, not a human in the loop.
+
+## Autonomy
+
+Switching the loop on is the only decision an operator makes. After that there is no
+confirmation prompt, no queue of trades waiting to be signed off and no operator veto:
+the engine opens, manages and closes positions on its own judgement, and stands down
+when it sees nothing worth doing — a decision the journal records exactly like a trade.
+The brakes are all mechanical and all in code: budgets, circuit breakers, the
+SDK-versus-CLI book check and the MCP quote cross-check. Any of them can stop a ticket;
+nobody can wave one through.
+
+`DRY_RUN=true` still exists, but as a development escape hatch for rehearsing a cycle
+offline. It is off by default, and both `run-agent` and the Windows launcher announce
+the mode on startup, because a silent dry run costs a session and looks exactly like an
+agent that found nothing to do.
 
 ## Quick start
 
@@ -170,26 +189,27 @@ Paste **paper** keys from the
 uv run smoke-paper                            # verify keys: clock, account, options BP
 uv run scan                                   # signals + ranked opportunities, no trading
 uv run python scripts/broker_report.py        # SDK vs CLI, signals, scanner, stress table
-uv run run-agent                              # one cycle (dry run)
-uv run run-agent --execute                    # send the ticket to paper
-uv run run-agent --loop --execute --interval 180
+uv run run-agent                              # one cycle; sends the ticket if it likes one
+uv run run-agent --dry-run                    # rehearse a cycle, send nothing
+uv run run-agent --loop --interval 180        # the contest loop
 uv run streamlit run app/streamlit_app.py     # dashboard (read-only; never sends orders)
-.\scripts\run-forever.ps1 -Execute            # Windows: restart-on-crash wrapper
+.\scripts\run-forever.ps1                     # Windows: restart-on-crash wrapper
 uv run pytest                                 # 680+ tests, no keys or network needed
 uv run ruff check .
 ```
 
-Windows note: `start-agent.cmd` double-clicks into the same loop (preflight, type
-`EXECUTE` to send, second window with `agent-health`), and `stop-agent.cmd` ends it.
-Optional; the commands above are enough.
+Windows note: `start-agent.cmd` double-clicks into the same loop (preflight, then a
+second window running `agent-health`), and `stop-agent.cmd` ends it. It asks nothing:
+opening it starts an agent that trades. Full walkthrough, including what happens when
+the connection drops, in [docs/running-the-agent.md](docs/running-the-agent.md).
 
 Optional extras: `uv sync --extra llm` for the analyst, `uv sync --extra mcp` for the
 research plane. Both fail open when absent.
 
 The Streamlit app never submits an order. Without API keys it still replays
 `app/fixtures/demo_journal.jsonl`. On Streamlit Community Cloud, put **paper** keys in
-the secrets UI (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `DRY_RUN=true`,
-`ALPACA_LIVE_TRADE=false`) — never in the repo.
+the secrets UI (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `ALPACA_LIVE_TRADE=false`) —
+never in the repo. The hosted page only reads; the agent runs elsewhere.
 
 `--loop` repeats the cycle during the session and polls less often overnight. Options are
 day orders, so nothing is sent while the market is closed.
@@ -221,7 +241,7 @@ knowing:
 | --- | --- | --- |
 | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` | – | Paper keys |
 | `ALPACA_LIVE_TRADE` | `false` | Anything truthy aborts startup |
-| `DRY_RUN` | `true` | Build and validate orders without sending them |
+| `DRY_RUN` | `false` | Development escape hatch: build and validate orders without sending them |
 | `UNIVERSE` | 14 liquid names | Comma-separated; liquidity is re-checked at runtime |
 | `MIN_DTE` / `MAX_DTE` | `1` / `9` | Expiry window; theta per day is highest here |
 | `VRP_Z_ENTRY` | `0.15` | How rich or cheap volatility must be to act |

@@ -80,8 +80,10 @@ class Settings(BaseSettings):
     alpaca_secret_key: str = ""
     # Any truthy value aborts startup. This project has no live-trading code path.
     alpaca_live_trade: bool = False
-    # Orders are simulated until this is explicitly turned off.
-    dry_run: bool = True
+    # The agent is autonomous: starting it *is* the decision to trade, so approved
+    # tickets go out without anyone confirming them. This flag is a development escape
+    # hatch for rehearsing a cycle offline, not an operating mode the loop asks about.
+    dry_run: bool = False
 
     # --- Universe --------------------------------------------------------------
     # Comma-separated so a plain .env line works. Liquidity is re-checked at runtime,
@@ -111,10 +113,11 @@ class Settings(BaseSettings):
     debit_short_delta: float = Field(default=0.25, gt=0, lt=1.0)
 
     # --- Liquidity gates -------------------------------------------------------
+    # Entry gates only. Exits are deliberately never liquidity-gated: getting out
+    # matters more than getting a good price, so `build_exit` quotes whatever the
+    # market shows rather than refusing to close a position that has gone wide.
     min_open_interest: int = Field(default=200, ge=0)
     max_spread_fraction: float = Field(default=0.08, gt=0)
-    # Getting out matters more than getting a good price, so exits accept wider quotes.
-    max_exit_spread_fraction: float = Field(default=0.25, gt=0)
 
     # --- Expected-value gates --------------------------------------------------
     # Expected value per dollar of risk. Below this the trade is noise.

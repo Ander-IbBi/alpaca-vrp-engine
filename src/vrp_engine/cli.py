@@ -173,13 +173,38 @@ def agent_health() -> int:
     return 0 if state in (OK, LATE) else 1
 
 
+def execution_mode(*, dry_run_requested: bool, dry_run_setting: bool) -> tuple[bool, str]:
+    """Resolve whether this run trades, and the line that says so out loud.
+
+    Trading is the default because starting the agent is the decision to trade. The
+    only two ways to end up rehearsing are asking for it on the command line or leaving
+    `DRY_RUN=true` in the environment, and both are announced: a silent dry run costs a
+    whole session and looks exactly like an agent that found nothing worth doing.
+    """
+    if dry_run_requested:
+        return False, "DRY RUN (--dry-run): the engine decides and journals, sends nothing."
+    if dry_run_setting:
+        return False, (
+            "DRY RUN (DRY_RUN=true in the environment): the engine decides and journals, "
+            "sends nothing. Remove it from .env to let the agent trade."
+        )
+    return True, "AUTONOMOUS: approved tickets go straight to the Alpaca paper account."
+
+
 def run_agent() -> int:
-    """Run one agent cycle, or a loop during the session. `--execute` sends paper orders."""
+    """Run one agent cycle, or a loop during the session. Starting it means trading."""
     parser = argparse.ArgumentParser(description="Run the VRP Engine agent.")
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Rehearse a cycle: decide and journal, send nothing. For development.",
+    )
+    parser.add_argument(
+        # Executing is the default now, so this only exists to keep an older shortcut
+        # or scheduled task from failing at argument parsing.
         "--execute",
         action="store_true",
-        help="Actually submit orders to the paper account (default: dry run).",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--loop",
@@ -197,10 +222,14 @@ def run_agent() -> int:
     connected = _connect()
     if connected is None:
         return 1
-    _, client = connected
+    settings, client = connected
+
+    execute, announcement = execution_mode(
+        dry_run_requested=args.dry_run, dry_run_setting=settings.dry_run
+    )
+    print(announcement)
 
     agent = VrpAgent(client)
-    execute = True if args.execute else None
     if args.loop:
         return _run_loop(agent, execute=execute, interval=max(args.interval, 30))
 
@@ -220,10 +249,10 @@ def _sleep_seconds(agent: VrpAgent, interval: int) -> int:
     return min(max(interval * 6, 1800), 3600)
 
 
-def _run_loop(agent: VrpAgent, *, execute: bool | None, interval: int) -> int:
+def _run_loop(agent: VrpAgent, *, execute: bool, interval: int) -> int:
     print(
         f"Looping every {interval}s while the market is open. "
-        f"Ctrl+C to stop. execute={bool(execute)}"
+        f"Ctrl+C to stop. execute={execute}"
     )
     try:
         while True:

@@ -1,7 +1,7 @@
 # Keep the agent loop alive for the whole contest week.
 #
-#   .\scripts\run-forever.ps1                 # dry run, safe to leave running
-#   .\scripts\run-forever.ps1 -Execute        # sends tickets to the paper account
+#   .\scripts\run-forever.ps1                 # autonomous: sends tickets to the paper account
+#   .\scripts\run-forever.ps1 -DryRun         # rehearse only, for development
 #
 # The cycle already survives API faults on its own: a failed cycle is journalled and
 # the next one runs. This wrapper covers the rarer case where the process itself dies,
@@ -10,7 +10,7 @@
 # Ctrl+C twice to stop for good: once to end the child, once to end the loop.
 
 param(
-    [switch]$Execute,
+    [switch]$DryRun,
     [int]$Interval = 180,
     [switch]$AllowSleep
 )
@@ -41,7 +41,7 @@ public static extern uint SetThreadExecutionState(uint esFlags);
 }
 
 $arguments = @('run', 'run-agent', '--loop', '--interval', $Interval)
-if ($Execute) { $arguments += '--execute' }
+if ($DryRun) { $arguments += '--dry-run' }
 
 # The watcher tracks this wrapper rather than the Python child: the child is expected
 # to come and go across restarts, whereas if the wrapper dies nothing restarts anything.
@@ -49,9 +49,9 @@ $pidFile = Join-Path $repo 'data\agent.pid'
 New-Item -ItemType Directory -Force -Path (Split-Path $pidFile) | Out-Null
 Set-Content -Path $pidFile -Value $PID -Encoding ascii
 
-Write-Host "VRP Engine wrapper: execute=$($Execute.IsPresent) interval=${Interval}s pid=$PID" -ForegroundColor Cyan
-if (-not $Execute) {
-    Write-Host "Dry run: no orders will be sent. Add -Execute when you mean it." -ForegroundColor Yellow
+Write-Host "VRP Engine wrapper: dryRun=$($DryRun.IsPresent) interval=${Interval}s pid=$PID" -ForegroundColor Cyan
+if ($DryRun) {
+    Write-Host "Dry run: no orders will be sent. Drop -DryRun to let the agent trade." -ForegroundColor Yellow
 }
 
 try {

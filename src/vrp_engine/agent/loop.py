@@ -350,7 +350,11 @@ class VrpAgent:
     # --- the cycle --------------------------------------------------------
 
     def run_once(self, *, execute: bool | None = None) -> AgentCycle:
-        """One full pass. Defaults to the DRY_RUN setting; pass execute=True to trade."""
+        """One full pass, trading by default. Pass execute=False to rehearse instead.
+
+        Leaving `execute` unset follows the DRY_RUN setting, which is false unless a
+        developer turned it on: nothing between here and the broker asks a human.
+        """
         try:
             return self._run_once_inner(execute=execute)
         except Exception as exc:  # noqa: BLE001 — keep --loop alive through API faults
@@ -596,11 +600,12 @@ class VrpAgent:
             self._record(cycle)
             return cycle
 
-        cycle.notes.append(
-            "Order submitted to the paper account."
-            if send
-            else "Dry run: order was built and validated but not sent."
-        )
+        # A closed market already wrote its own note above. Calling that a dry run too
+        # would misreport why nothing went out, and the journal is the audit trail.
+        if send:
+            cycle.notes.append("Order submitted to the paper account.")
+        elif not should_execute:
+            cycle.notes.append("Dry run: order was built and validated but not sent.")
 
         if send:
             cycle.reconciliation = self._reconcile(proposal, positions)

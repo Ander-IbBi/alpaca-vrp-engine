@@ -51,8 +51,9 @@ def test_mcp_args_split_into_a_command_list():
     assert settings.mcp_args_list() == ["alpaca-mcp-server", "--transport", "stdio"]
 
 
-def test_dry_run_defaults_to_true():
-    assert Settings().dry_run is True
+def test_the_agent_trades_by_default():
+    """Autonomy is the default: nothing has to be switched on for a ticket to go out."""
+    assert Settings().dry_run is False
 
 
 def test_legacy_unwind_defaults_to_enabled():

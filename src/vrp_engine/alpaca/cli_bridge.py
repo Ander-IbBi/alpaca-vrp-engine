@@ -4,7 +4,7 @@ The agent trades through `alpaca-py`. This module deliberately reads the same
 account a second time, through a completely different client, so a cycle can
 answer "does the broker really hold what the SDK says it holds?" before it sends
 another ticket. A mismatch means our view of the book is stale, and acting on a
-stale book is how an overlay ends up double-hedged or accidentally naked.
+stale book is how an agent doubles a spread it thought it had already closed.
 
 The CLI is optional infrastructure: if the binary is missing the bridge reports
 that plainly instead of raising, so CI and a fresh checkout still work.

@@ -8,8 +8,8 @@ The page degrades instead of failing. Without API keys it replays the recorded
 decision journal, so every tab still has real content and a visitor with no
 credentials sees the whole reasoning trail.
 
-This module never submits an order. Execution stays on the operator machine via
-`run-agent --execute`.
+This module never submits an order. Execution stays on the operator machine, in the
+`run-agent` loop, which trades on its own judgement without consulting this page.
 """
 
 from __future__ import annotations
@@ -291,7 +291,7 @@ def render_header(settings: Settings, live: dict[str, Any] | None) -> None:
 
     flags = st.columns(4)
     flags[0].success("PAPER ONLY — no live code path")
-    flags[1].info(f"DRY_RUN = {settings.dry_run}")
+    flags[1].success("AUTONOMOUS — no approval step")
     flags[2].info(f"Universe: {len(settings.universe_list())} symbols")
     flags[3].info(f"Expiries: {settings.min_dte}–{settings.max_dte} DTE")
 
@@ -908,6 +908,9 @@ def render_how_it_works(settings: Settings) -> None:
         "proves it from the legs rather than trusting the ticket's label.\n"
         "- **No order without a risk review.** Nothing reaches `submit_order` without "
         "passing `review_proposal` first.\n"
+        "- **No human approval step.** Switching the loop on is the only decision an "
+        "operator makes. After that it opens, manages and closes positions on its own; "
+        "there is no confirmation prompt and no way to wave a trade through.\n"
         "- **No trading from this page.** The dashboard is read-only; the agent runs "
         "as a separate process.\n"
         "- **The LLM cannot resize.** It may explain, and may raise a soft veto on one "
@@ -970,6 +973,7 @@ def main() -> None:
             "- Every short leg is covered inside its own ticket\n"
             "- Orders pass `risk.review_proposal` or they do not exist\n"
             "- The LLM may explain and soft-veto, never resize\n"
+            "- Nobody approves a trade; the loop decides and acts\n"
             "- This page never sends an order"
         )
 
