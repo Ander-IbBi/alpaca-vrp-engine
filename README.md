@@ -200,7 +200,8 @@ day orders, so nothing is sent while the market is closed.
 | `src/vrp_engine/risk/` | `limits` (defined-risk proof, portfolio budgets), `portfolio` (payoff and stress), `account` (breakers) |
 | `src/vrp_engine/agent/` | Cycle loop, LLM analyst, read-only tool surface |
 | `src/vrp_engine/journal.py` | Append-only JSONL audit trail |
-| `app/streamlit_app.py` | Dashboard: equity curve, open structures, scanner, payoff curve, risk gauges, journal |
+| `src/vrp_engine/viz.py` | Pure chart data, shared by the live and replayed views |
+| `app/streamlit_app.py` | Dashboard: overview, risk, opportunities, journal, how it works |
 | `app/fixtures/` | Sample decision journal the hosted demo falls back to |
 | `docs/` | Strategy maths, architecture, MCP and CLI |
 

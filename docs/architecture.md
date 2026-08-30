@@ -140,11 +140,25 @@ digest, the proposal with its full analytics, the risk checks and the execution 
 It is also the drawdown breaker's memory — the high-water mark is read from here, not
 from the starting balance, so a good week cannot be given back unnoticed.
 
+### `viz.py`
+
+Pure functions that turn signals, a scan, a portfolio or the journal into chart-ready
+rows. They read a field the same way from a live pydantic model and from the JSON digest
+the journal stores, which is what lets the dashboard draw the same picture from either
+source — and lets the whole visual surface be tested without Streamlit.
+
 ### `app/streamlit_app.py`
 
-Equity curve, open structures with greeks and live expected value, the ranked opportunity
-scanner, the portfolio payoff curve with stress markers, risk-budget gauges, and the
-decision journal. If it is not visible here, for a judge it does not exist.
+Five tabs: **Overview** (equity curve, decision timeline, open structures), **Risk**
+(budget bullet chart, payoff curve with the worst case marked, stress scenarios),
+**Opportunities** (the realised-versus-implied map with the stand-down band, the wedge
+dumbbell, the ranked scanner), **Journal** and **How it works**.
+
+Each tab degrades on its own: with API keys it reads the paper account, without them it
+replays `app/fixtures/demo_journal.jsonl`, and with neither it says so. The page is
+read-only — it has no path to `submit_order`. `tests/test_dashboard.py` runs the whole
+script headless through `streamlit.testing.v1.AppTest`, so a rendering error cannot wait
+to appear until it is deployed.
 
 ## Where to change what
 
@@ -185,7 +199,7 @@ alpaca-vrp-engine/
   pyproject.toml       ← dependencies, extras and console scripts (uv)
   .env.example         ← every variable, values empty
   src/vrp_engine/      ← the product
-  app/                 ← Streamlit dashboard
+  app/                 ← Streamlit dashboard, plus the sample journal it falls back to
   scripts/             ← smoke test, broker report, agent runner
   tests/               ← offline, keyless
   docs/                ← strategy maths, this file, broker planes

@@ -10,8 +10,11 @@ dependencies = [
     "pydantic>=2.9.0",
     "pydantic-settings>=2.6.0",
     "python-dotenv>=1.0.1",
-    "streamlit>=1.40.0",
-    # Used directly by the dashboard tables and charts.
+    # 1.51 is the floor for `width="stretch"`, which replaces the deprecated
+    # `use_container_width` the dashboard used to pass.
+    "streamlit>=1.51.0",
+    # Used directly by the dashboard tables and charts. Altair arrives with
+    # Streamlit itself, so the charts add no dependency of their own.
     "pandas>=2.2.0",
 ]
 
