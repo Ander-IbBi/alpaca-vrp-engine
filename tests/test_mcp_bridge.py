@@ -70,6 +70,12 @@ def test_the_daily_briefing_asks_for_breadth_activity_and_news():
     assert tools == {"get_market_movers", "get_most_active_stocks", "get_news"}
 
 
+def test_the_movers_call_names_the_market():
+    """`market_type` is a path parameter; without it Alpaca answers 400, not an empty list."""
+    movers = next(c for c in default_calls(_settings()) if c.tool == "get_market_movers")
+    assert movers.arguments["market_type"] == "stocks"
+
+
 def test_the_news_call_carries_the_universe():
     news = next(c for c in default_calls(_settings()) if c.tool == "get_news")
     assert "SPY" in news.arguments["symbols"]

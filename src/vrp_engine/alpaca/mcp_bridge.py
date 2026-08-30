@@ -209,7 +209,10 @@ def default_calls(settings: Settings) -> list[ToolCall]:
     """The daily briefing batch: breadth, activity and headlines on the universe."""
     universe = settings.universe_list()
     return [
-        ToolCall(tool="get_market_movers", arguments={"top": 10}),
+        # `market_type` is a path parameter on the screener endpoint, not an optional
+        # filter: without it the server builds a URL with the placeholder still in it
+        # and Alpaca answers 400 "invalid market type".
+        ToolCall(tool="get_market_movers", arguments={"market_type": "stocks", "top": 10}),
         ToolCall(tool="get_most_active_stocks", arguments={"top": 10}),
         ToolCall(
             tool="get_news",
