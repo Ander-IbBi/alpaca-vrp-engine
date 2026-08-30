@@ -175,7 +175,7 @@ uv run run-agent --execute                    # send the ticket to paper
 uv run run-agent --loop --execute --interval 180
 uv run streamlit run app/streamlit_app.py     # dashboard (read-only; never sends orders)
 .\scripts\run-forever.ps1 -Execute            # Windows: restart-on-crash wrapper
-uv run pytest                                 # 580+ tests, no keys or network needed
+uv run pytest                                 # 680+ tests, no keys or network needed
 uv run ruff check .
 ```
 
