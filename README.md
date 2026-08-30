@@ -179,6 +179,10 @@ uv run pytest                                 # 580+ tests, no keys or network n
 uv run ruff check .
 ```
 
+Windows note: `start-agent.cmd` double-clicks into the same loop (preflight, type
+`EXECUTE` to send, second window with `agent-health`). Optional; the commands above
+are enough.
+
 Optional extras: `uv sync --extra llm` for the analyst, `uv sync --extra mcp` for the
 research plane. Both fail open when absent.
 

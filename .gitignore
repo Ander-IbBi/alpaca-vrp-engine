@@ -22,6 +22,8 @@ dist/
 
 # --- Runtime artifacts ---
 data/journal/*.jsonl
+data/*.pid
+data/preflight-error.log
 logs/
 *.log
 

@@ -1,10 +1,11 @@
-"""Command-line entry points: `smoke-paper`, `run-agent` and `scan`."""
+"""Command-line entry points: `smoke-paper`, `run-agent`, `scan` and `agent-health`."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import time
+from pathlib import Path
 
 from vrp_engine.agent.loop import VrpAgent
 from vrp_engine.alpaca.client import PaperAlpaca
@@ -15,6 +16,22 @@ from vrp_engine.config import (
     assert_paper_only,
     load_settings,
 )
+from vrp_engine.health import (
+    DEFAULT_INTERVAL_SECONDS,
+    DEFAULT_PID_PATH,
+    LATE,
+    OK,
+    STALE,
+    UNKNOWN,
+    assess,
+    first_line,
+    format_age,
+    heartbeat,
+    process_alive,
+    read_pid,
+    thresholds,
+)
+from vrp_engine.journal import Journal
 
 
 def _connect() -> tuple[Settings, PaperAlpaca] | None:
@@ -66,6 +83,94 @@ def scan() -> int:
     }
     print(json.dumps(payload, indent=2, default=str))
     return 0
+
+
+_VERDICT_LABELS = {
+    OK: "OPERATING",
+    LATE: "SLOW",
+    STALE: "NOT RUNNING",
+    UNKNOWN: "NO CYCLES YET",
+}
+
+
+def agent_health() -> int:
+    """Is the loop still writing cycles? Reads the journal, never the broker.
+
+    Deliberately keyless: the point is to check on the agent from a second window,
+    and asking for credentials to do that would only tempt someone to copy them.
+    """
+    parser = argparse.ArgumentParser(description="Check that the agent loop is alive.")
+    parser.add_argument("--json", action="store_true", help="Machine-readable, for the watcher.")
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=DEFAULT_INTERVAL_SECONDS,
+        help="The loop's cadence in seconds; it sets how long a silence is tolerable.",
+    )
+    parser.add_argument(
+        "--pid-file",
+        default=str(DEFAULT_PID_PATH),
+        help="Where the launcher wrote the loop's process id.",
+    )
+    args = parser.parse_args()
+
+    try:
+        settings = assert_paper_only(load_settings())
+    except LiveTradingForbiddenError as exc:
+        print(f"ERROR: {exc}")
+        return 1
+
+    beat = heartbeat(Journal(settings.journal_path).read_all())
+    late_after, stale_after = thresholds(market_open=beat.market_open, interval=args.interval)
+    pid = read_pid(Path(args.pid_file))
+    alive = process_alive(pid)
+    call = assess(
+        beat, interval=args.interval, pid_present=pid is not None, process_alive=alive
+    )
+    state = call.state
+    failure = first_line(beat.failure)
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "verdict": state,
+                    "label": _VERDICT_LABELS[state],
+                    "reason": call.reason,
+                    "ts": beat.ts,
+                    "age_seconds": beat.age_seconds,
+                    "age": format_age(beat.age_seconds),
+                    "market_open": beat.market_open,
+                    "action": beat.action,
+                    "equity": beat.equity,
+                    "submitted": beat.submitted,
+                    "failed": beat.failed,
+                    "failure": failure,
+                    "cycles": beat.cycles,
+                    "pid": pid,
+                    "process_alive": alive,
+                    "late_after_seconds": late_after,
+                    "stale_after_seconds": stale_after,
+                }
+            )
+        )
+    else:
+        session = "unknown" if beat.market_open is None else (
+            "market open" if beat.market_open else "market closed"
+        )
+        equity = f"${beat.equity:,.0f}" if beat.equity is not None else "unknown"
+        process = f"alive (pid {pid})" if alive else (
+            f"gone (pid {pid})" if pid else "no pid file"
+        )
+        print(f"VRP Engine - {_VERDICT_LABELS[state]} ({call.reason})")
+        print(f"  last cycle   {format_age(beat.age_seconds)} ago, {session}")
+        print(f"  decision     {beat.action or 'none'}, equity {equity}")
+        print(f"  process      {process}")
+        print(f"  journal      {beat.cycles} cycle(s)")
+        if beat.failed:
+            print(f"  warning      {failure}")
+
+    return 0 if state in (OK, LATE) else 1
 
 
 def run_agent() -> int:

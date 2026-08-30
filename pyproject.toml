@@ -36,6 +36,7 @@ mcp = [
 smoke-paper = "vrp_engine.cli:smoke"
 run-agent = "vrp_engine.cli:run_agent"
 scan = "vrp_engine.cli:scan"
+agent-health = "vrp_engine.cli:agent_health"
 
 [build-system]
 requires = ["setuptools>=68"]

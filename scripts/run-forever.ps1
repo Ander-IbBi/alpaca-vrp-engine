@@ -11,23 +11,60 @@
 
 param(
     [switch]$Execute,
-    [int]$Interval = 180
+    [int]$Interval = 180,
+    [switch]$AllowSleep
 )
 
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
+# An agent that only trades while you are at the keyboard is not an agent. Ask Windows
+# to keep the machine awake for as long as this window lives. The screen may still go
+# dark, and the request dies with the process, so nothing is left changed behind us.
+$ES_CONTINUOUS = [uint32]'0x80000000'
+$ES_SYSTEM_REQUIRED = [uint32]'0x00000001'
+$keepAwake = -not $AllowSleep
+if ($keepAwake) {
+    try {
+        if (-not ('VrpEngine.Power' -as [type])) {
+            Add-Type -Namespace 'VrpEngine' -Name 'Power' -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)]
+public static extern uint SetThreadExecutionState(uint esFlags);
+'@
+        }
+        [void][VrpEngine.Power]::SetThreadExecutionState($ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED)
+        Write-Host 'Holding the machine awake while the agent runs (-AllowSleep to opt out).' -ForegroundColor DarkGray
+    } catch {
+        Write-Host "Could not ask Windows to stay awake: $($_.Exception.Message)" -ForegroundColor Yellow
+        $keepAwake = $false
+    }
+}
+
 $arguments = @('run', 'run-agent', '--loop', '--interval', $Interval)
 if ($Execute) { $arguments += '--execute' }
 
-Write-Host "VRP Engine wrapper: execute=$($Execute.IsPresent) interval=${Interval}s" -ForegroundColor Cyan
+# The watcher tracks this wrapper rather than the Python child: the child is expected
+# to come and go across restarts, whereas if the wrapper dies nothing restarts anything.
+$pidFile = Join-Path $repo 'data\agent.pid'
+New-Item -ItemType Directory -Force -Path (Split-Path $pidFile) | Out-Null
+Set-Content -Path $pidFile -Value $PID -Encoding ascii
+
+Write-Host "VRP Engine wrapper: execute=$($Execute.IsPresent) interval=${Interval}s pid=$PID" -ForegroundColor Cyan
 if (-not $Execute) {
     Write-Host "Dry run: no orders will be sent. Add -Execute when you mean it." -ForegroundColor Yellow
 }
 
-while ($true) {
-    Write-Host "[$(Get-Date -Format u)] starting agent loop" -ForegroundColor Green
-    & uv @arguments
-    Write-Host "[$(Get-Date -Format u)] agent exited (code $LASTEXITCODE); restarting in 30s" -ForegroundColor Yellow
-    Start-Sleep -Seconds 30
+try {
+    while ($true) {
+        Write-Host "[$(Get-Date -Format u)] starting agent loop" -ForegroundColor Green
+        & uv @arguments
+        Write-Host "[$(Get-Date -Format u)] agent exited (code $LASTEXITCODE); restarting in 30s" -ForegroundColor Yellow
+        Start-Sleep -Seconds 30
+    }
+}
+finally {
+    Remove-Item $pidFile -ErrorAction SilentlyContinue
+    if ($keepAwake) {
+        [void][VrpEngine.Power]::SetThreadExecutionState($ES_CONTINUOUS)
+    }
 }

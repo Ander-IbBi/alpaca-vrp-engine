@@ -14,6 +14,38 @@ from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
 
 from vrp_engine.config import Settings, assert_paper_only, load_settings, require_credentials
 
+# alpaca-py calls `session.request(...)` without a timeout, so a connection that dies
+# mid-flight — a laptop changing network, a router rebooting — leaves the loop blocked on
+# a socket that will never answer. The process stays alive, so the restart wrapper sees
+# nothing wrong and the agent quietly stops trading. Bounding every call turns that
+# silent hang into an ordinary exception, which the cycle already knows how to journal
+# and recover from on the next pass.
+CONNECT_TIMEOUT_SECONDS = 10.0
+READ_TIMEOUT_SECONDS = 30.0
+
+
+def bind_request_timeout(
+    client: Any,
+    timeout: tuple[float, float] = (CONNECT_TIMEOUT_SECONDS, READ_TIMEOUT_SECONDS),
+) -> None:
+    """Give an alpaca-py client's HTTP session the default timeout it does not ship with.
+
+    `setdefault` rather than an override, so any call that asks for its own timeout keeps
+    it, and the flag makes a second application a no-op.
+    """
+    session = getattr(client, "_session", None)
+    if session is None or getattr(session, "_vrp_timeout_bound", False):
+        return
+
+    unbounded_request = session.request
+
+    def request(*args: Any, **kwargs: Any) -> Any:
+        kwargs.setdefault("timeout", timeout)
+        return unbounded_request(*args, **kwargs)
+
+    session.request = request
+    session._vrp_timeout_bound = True
+
 
 class PaperAlpaca:
     """Thin wrapper over alpaca-py. `paper=True` is not configurable on purpose."""
@@ -34,6 +66,8 @@ class PaperAlpaca:
             api_key=self.settings.alpaca_api_key,
             secret_key=self.settings.alpaca_secret_key,
         )
+        for client in (self.trading, self.option_data, self.stock_data):
+            bind_request_timeout(client)
 
     def clock(self) -> Any:
         return self.trading.get_clock()
