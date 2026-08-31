@@ -37,15 +37,20 @@ the account identity, and which symbols are open.
 **Before a ticket** (`cross_check_account`): if the two views disagree, the cycle refuses
 to trade and says so in the journal.
 
-**After a submission** (`reconcile_after_submit`): the book is read again.
+**After a submission** (`reconcile_after_submit`): the book is read again, including a
+fresh SDK position list so the comparison is not against the pre-trade snapshot.
 
 - Expected legs missing from the CLI's list are reported as **pending**, not as a fault —
   a limit order resting at the net mid may simply not have filled yet.
-- The two clients *disagreeing* about what is open is the case that matters:
+- Expected legs that one client has already picked up and the other has not are the
+  same in-flight fill, not a split book.
+- A symbol that *neither* side expected from this ticket is the case that matters:
   `consistent=False` **freezes new entries** until they agree again.
 
-Exits stay allowed while frozen. A safety check that blocked closing would trap the book
-it fired over, which is worse than the mismatch it was reacting to.
+Exits stay allowed while frozen. A later cycle that sees the two views match thaws
+the freeze even if it has nothing to send; requiring another ticket to lift it would
+trap the book on a hold. A safety check that blocked closing would trap the book it
+fired over, which is worse than the mismatch it was reacting to.
 
 The CLI also answers the market-hours question independently (`cli_market_open`), so a
 wrong `is_open` from one source cannot on its own decide whether the agent trades.

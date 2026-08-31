@@ -333,9 +333,31 @@ def test_a_reconciliation_mismatch_freezes_new_entries(wired, tmp_path):
     assert first.execution["submitted"] is True
     assert agent.entries_frozen
 
-    second = agent.run_once(execute=True)
-    assert second.proposal.skip
-    assert any("frozen" in note for note in second.notes)
+
+def test_agreeing_views_thaw_a_frozen_hold_cycle(wired, tmp_path):
+    settings = _settings(tmp_path, dry_run=False, min_edge=10.0)
+    agent = _agent(settings, _client(settings))
+    agent.entries_frozen = True
+    cycle = agent.run_once(execute=True)
+    assert cycle.proposal.skip
+    assert not agent.entries_frozen
+    assert any("agree on the book again" in note for note in cycle.notes)
+
+
+def test_a_lasting_mismatch_keeps_entries_frozen(wired, tmp_path):
+    settings = _settings(tmp_path, dry_run=False, min_edge=10.0)
+    agent = _agent(
+        settings,
+        _client(settings),
+        cross_checker=lambda **_: BrokerCrossCheck(
+            checked=True, agrees=False, notes=["CLI reports something else"]
+        ),
+    )
+    agent.entries_frozen = True
+    cycle = agent.run_once(execute=True)
+    assert cycle.proposal.skip
+    assert agent.entries_frozen
+    assert any("frozen" in note for note in cycle.notes)
 
 
 def test_a_consistent_reconciliation_thaws_new_entries(wired, tmp_path):

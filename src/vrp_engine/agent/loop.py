@@ -490,10 +490,22 @@ class VrpAgent:
 
         today = context.today
         if self.entries_frozen:
-            cycle.notes.append(
-                "New entries are frozen after a broker reconciliation mismatch; "
-                "managing exits only until the two views agree again."
-            )
+            check = self._cross_check(positions, account)
+            cycle.broker_cross_check = check
+            if check.checked and check.agrees:
+                # The freeze is process-local. Once the two views match again there is
+                # nothing left to wait for, and requiring another ticket to thaw would
+                # trap the book on a hold cycle for the rest of the session.
+                self.entries_frozen = False
+                context.new_risk_allowed = observed.guard.new_risk_allowed
+                cycle.notes.append(
+                    "SDK and CLI agree on the book again; new entries are allowed."
+                )
+            else:
+                cycle.notes.append(
+                    "New entries are frozen after a broker reconciliation mismatch; "
+                    "managing exits only until the two views agree again."
+                )
 
         proposal = self.strategy.propose(context)
         cycle.proposal = proposal
@@ -680,7 +692,13 @@ class VrpAgent:
             return BrokerCrossCheck(checked=False, notes=[f"{type(exc).__name__}: {exc}"])
 
     def _reconcile(self, proposal: ProposedTrade, positions: list[Any]) -> FillReconciliation:
-        symbols = {str(getattr(p, "symbol", "")).upper() for p in positions}
+        # The cycle-start snapshot is already stale the moment a fill lands. Compare
+        # the CLI to a fresh SDK read so a paper fill cannot look like two books.
+        try:
+            fresh = self.client.positions()
+        except Exception:  # noqa: BLE001 — fall back to what this cycle already saw
+            fresh = positions
+        symbols = {str(getattr(p, "symbol", "")).upper() for p in fresh}
         symbols.discard("")
         try:
             return self.reconciler(

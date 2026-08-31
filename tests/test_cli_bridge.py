@@ -297,6 +297,26 @@ def test_diverging_broker_views_are_inconsistent(monkeypatch):
     assert "diverged" in result.summary()
 
 
+def test_a_fill_the_cli_sees_first_is_confirmed_not_a_split_book(monkeypatch):
+    # Paper fills show up on the CLI a moment before a stale SDK snapshot.
+    monkeypatch.setattr(cli_bridge, "cli_position_symbols", lambda: {"SPY_A", "SPY_B"})
+    result = reconcile_after_submit(
+        sdk_symbols=set(), expected_symbols=["SPY_A", "SPY_B"], opening=True
+    )
+    assert result.consistent
+    assert result.confirmed_symbols == ["SPY_A", "SPY_B"]
+    assert result.pending_symbols == []
+
+
+def test_a_close_the_cli_sees_first_is_confirmed_not_a_split_book(monkeypatch):
+    monkeypatch.setattr(cli_bridge, "cli_position_symbols", lambda: set())
+    result = reconcile_after_submit(
+        sdk_symbols={"SPY_A"}, expected_symbols=["SPY_A"], opening=False
+    )
+    assert result.consistent
+    assert result.confirmed_symbols == ["SPY_A"]
+
+
 def test_reconciliation_is_skipped_when_the_cli_cannot_read_positions(monkeypatch):
     monkeypatch.setattr(cli_bridge, "cli_position_symbols", lambda: None)
     result = reconcile_after_submit(

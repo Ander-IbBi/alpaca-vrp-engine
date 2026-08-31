@@ -219,6 +219,10 @@ def reconcile_after_submit(
 
     `opening` flips what counts as confirmation: a new structure should show up in the
     position list, while a closed one should disappear from it.
+
+    Paper fills are often visible on one client a moment before the other. Legs that
+    belong to the ticket just sent are treated as pending or confirmed, not as a split
+    book. Only a symbol that neither side expected from this ticket is a real mismatch.
     """
     cli_symbols = cli_position_symbols()
     if cli_symbols is None:
@@ -226,21 +230,24 @@ def reconcile_after_submit(
             checked=False, notes=["CLI could not read positions after submission"]
         )
 
-    notes: list[str] = []
-    missing = sdk_symbols - cli_symbols
-    extra = cli_symbols - sdk_symbols
-    if missing:
-        notes.append(f"SDK reports {sorted(missing)} but the CLI does not")
-    if extra:
-        notes.append(f"CLI reports {sorted(extra)} but the SDK does not")
+    sdk = {symbol.upper() for symbol in sdk_symbols}
+    cli = {symbol.upper() for symbol in cli_symbols}
+    wanted = {symbol.upper() for symbol in expected_symbols}
 
-    wanted = {s.upper() for s in expected_symbols}
+    unexplained_missing = (sdk - cli) - wanted
+    unexplained_extra = (cli - sdk) - wanted
+    notes: list[str] = []
+    if unexplained_missing:
+        notes.append(f"SDK reports {sorted(unexplained_missing)} but the CLI does not")
+    if unexplained_extra:
+        notes.append(f"CLI reports {sorted(unexplained_extra)} but the SDK does not")
+
     if opening:
-        confirmed = sorted(wanted & cli_symbols)
-        pending = sorted(wanted - cli_symbols)
+        confirmed = sorted(wanted & cli)
+        pending = sorted(wanted - cli)
     else:
-        confirmed = sorted(wanted - cli_symbols)
-        pending = sorted(wanted & cli_symbols)
+        confirmed = sorted(wanted - cli)
+        pending = sorted(wanted & cli)
 
     return FillReconciliation(
         checked=True,
