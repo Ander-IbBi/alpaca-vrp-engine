@@ -15,9 +15,11 @@ on its own judgement, and does nothing on the cycles where it sees nothing worth
 
 ## Starting
 
-Double-click `start-agent.cmd`. Two windows open.
+Double-click `start-agent.cmd`. The launcher runs three checks, starts the loop in the
+background, and opens the panel. You can close the launcher window; the agent keeps
+running. Cycle output is appended to `data\agent.log`.
 
-The **agent window** runs three checks, then hands off to the loop:
+The launcher prints:
 
 ```
   [1/3] uv on PATH        ok
@@ -29,8 +31,8 @@ The **agent window** runs three checks, then hands off to the loop:
   Cadence: one cycle every 180s while the market is open.
 ```
 
-After that it prints one JSON block per cycle: what it saw, what it decided, and why.
-That same block is appended to the decision journal.
+After that the loop prints one JSON block per cycle to `data\agent.log`: what it saw,
+what it decided, and why. That same block is appended to the decision journal.
 
 The **panel window** is `agent-health`. It refreshes every 30 seconds and reads only the
 journal, never the broker, so it cannot get in the agent's way:
@@ -51,19 +53,13 @@ nothing about the agent.
 ## Stopping
 
 Double-click `stop-agent.cmd`. It kills the loop, the restart wrapper and the panel, and
-clears the pid file so the next start begins clean.
+clears the pid file so the next start begins clean. That is the only way to stop it:
+closing the launcher or the panel leaves the agent running on purpose.
 
 **Open positions stay open on Alpaca.** Every one of them is defined risk, so the worst
 case is already bounded and known — but nothing manages them, takes profit or closes
 them until you start the agent again. If you are stopping for the day with positions on,
 that is a deliberate choice to leave them unmanaged overnight.
-
-Closing the agent window by hand also works, but it tends to leave the panel running and
-a stale pid file behind, which then makes the panel report a process that died minutes
-ago. The shortcut tidies up all of it.
-
-`Ctrl+C` in the agent window is also a real stop: the loop treats it as a person asking
-it to end, and the wrapper does not restart after one.
 
 ## When the connection drops
 
@@ -75,8 +71,8 @@ rather than a failure. Nothing needs doing at any of these layers:
 - **A dead process.** The wrapper restarts it after 30 seconds. It keeps doing that all
   week, but it stops if the loop dies five times in a row within a minute of starting,
   because that is a setup problem no amount of retrying will fix.
-- **A sleeping machine.** The wrapper asks Windows to stay awake for as long as its
-  window is open. The screen may still go dark; the request disappears when the process
+- **A sleeping machine.** The wrapper asks Windows to stay awake for as long as it
+  is running. The screen may still go dark; the request disappears when the process
   ends, so nothing is left changed on your machine.
 - **A closed market.** The loop polls far less often out of hours and never sends an
   order, because options are day orders. It still wakes up for the opening bell: an
@@ -99,7 +95,8 @@ rather than retry a key that will keep being wrong. `-Unattended` overrides even
 | Panel shows `NOT RUNNING` | No cycles being written | `stop-agent.cmd`, then `start-agent.cmd` |
 | Panel shows `NO CYCLES YET` | Started, first cycle not finished | Wait one cadence |
 
-The full output of a failed preflight is kept at `data\preflight-error.log`.
+The full output of a failed preflight is kept at `data\preflight-error.log`. The loop
+itself writes to `data\agent.log`.
 
 ## Switches, if you ever need them
 

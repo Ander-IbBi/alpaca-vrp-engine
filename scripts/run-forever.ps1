@@ -7,8 +7,9 @@
 # the next one runs. This wrapper covers the rarer case where the process itself dies,
 # so a transient crash at 10:04 does not cost the rest of the day.
 #
-# Ctrl+C stops for good: the loop exits 0 on interrupt and the wrapper reads that as a
-# person asking it to stop, rather than as a crash worth restarting.
+# The launcher starts this hidden. Closing other windows does not stop it; stop-agent.cmd
+# does. Ctrl+C (if you run this in a terminal) exits 0 and is treated as a real stop,
+# not as a crash worth restarting.
 
 param(
     [switch]$DryRun,
@@ -20,7 +21,7 @@ $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
 # An agent that only trades while you are at the keyboard is not an agent. Ask Windows
-# to keep the machine awake for as long as this window lives. The screen may still go
+# to keep the machine awake for as long as this process lives. The screen may still go
 # dark, and the request dies with the process, so nothing is left changed behind us.
 $ES_CONTINUOUS = [uint32]'0x80000000'
 $ES_SYSTEM_REQUIRED = [uint32]'0x00000001'
@@ -47,12 +48,18 @@ if ($DryRun) { $arguments += '--dry-run' }
 # The watcher tracks this wrapper rather than the Python child: the child is expected
 # to come and go across restarts, whereas if the wrapper dies nothing restarts anything.
 $pidFile = Join-Path $repo 'data\agent.pid'
+$logFile = Join-Path $repo 'data\agent.log'
 New-Item -ItemType Directory -Force -Path (Split-Path $pidFile) | Out-Null
 Set-Content -Path $pidFile -Value $PID -Encoding ascii
 
-Write-Host "VRP Engine wrapper: dryRun=$($DryRun.IsPresent) interval=${Interval}s pid=$PID" -ForegroundColor Cyan
+function Write-Agent([string]$message, [string]$color = 'White') {
+    Write-Host $message -ForegroundColor $color
+    Add-Content -Path $logFile -Value $message -Encoding utf8
+}
+
+Write-Agent "VRP Engine wrapper: dryRun=$($DryRun.IsPresent) interval=${Interval}s pid=$PID" 'Cyan'
 if ($DryRun) {
-    Write-Host "Dry run: no orders will be sent. Drop -DryRun to let the agent trade." -ForegroundColor Yellow
+    Write-Agent "Dry run: no orders will be sent. Drop -DryRun to let the agent trade." 'Yellow'
 }
 
 # A crash is worth retrying; a loop that cannot even start is not. Counting only the
@@ -64,15 +71,23 @@ $fastFailures = 0
 
 try {
     while ($true) {
-        Write-Host "[$(Get-Date -Format u)] starting agent loop" -ForegroundColor Green
+        # Refresh on every spawn: other apps can clear the stay-awake request, and a
+        # hidden wrapper that has been up for days still has to hold the machine.
+        if ($keepAwake) {
+            try {
+                [void][VrpEngine.Power]::SetThreadExecutionState($ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED)
+            } catch { }
+        }
+        Write-Agent "[$(Get-Date -Format u)] starting agent loop" 'Green'
         $startedAt = Get-Date
-        & uv @arguments
+        # Hidden window: stdout would vanish, so the cycle JSON lands in the log.
+        & uv @arguments >> $logFile 2>&1
         $code = $LASTEXITCODE
         $ranFor = (Get-Date) - $startedAt
 
         # The loop returns 0 only on Ctrl+C, which is a person asking it to stop.
         if ($code -eq 0) {
-            Write-Host "[$(Get-Date -Format u)] agent stopped cleanly; not restarting." -ForegroundColor Cyan
+            Write-Agent "[$(Get-Date -Format u)] agent stopped cleanly; not restarting." 'Cyan'
             break
         }
 
@@ -83,22 +98,24 @@ try {
         }
 
         if ($fastFailures -ge $MaxFastFailures) {
-            Write-Host ''
-            Write-Host "  The agent failed to start $MaxFastFailures times in a row." -ForegroundColor Red
-            Write-Host '  This is a setup problem, not a blip. Check the errors above, then:' -ForegroundColor Yellow
-            Write-Host '    uv run smoke-paper' -ForegroundColor Gray
-            Write-Host '  Giving up so it does not respawn all night.' -ForegroundColor DarkGray
-            Write-Host ''
+            Write-Agent ''
+            Write-Agent "  The agent failed to start $MaxFastFailures times in a row." 'Red'
+            Write-Agent '  This is a setup problem, not a blip. Check the errors above, then:' 'Yellow'
+            Write-Agent '    uv run smoke-paper'
+            Write-Agent '  Giving up so it does not respawn all night.'
+            Write-Agent ''
             break
         }
 
-        Write-Host "[$(Get-Date -Format u)] agent exited (code $code); restarting in 30s" -ForegroundColor Yellow
+        Write-Agent "[$(Get-Date -Format u)] agent exited (code $code); restarting in 30s" 'Yellow'
         Start-Sleep -Seconds 30
     }
 }
 finally {
     Remove-Item $pidFile -ErrorAction SilentlyContinue
     if ($keepAwake) {
-        [void][VrpEngine.Power]::SetThreadExecutionState($ES_CONTINUOUS)
+        try {
+            [void][VrpEngine.Power]::SetThreadExecutionState($ES_CONTINUOUS)
+        } catch { }
     }
 }

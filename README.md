@@ -208,10 +208,11 @@ uv run pytest                                 # 700+ tests, no keys or network n
 uv run ruff check .
 ```
 
-Windows note: `start-agent.cmd` double-clicks into the same loop (preflight, then a
-second window running `agent-health`), and `stop-agent.cmd` ends it. It asks nothing:
-opening it starts an agent that trades. Full walkthrough, including what happens when
-the connection drops, in [docs/running-the-agent.md](docs/running-the-agent.md).
+Windows note: `start-agent.cmd` double-clicks into the same loop (preflight, then the
+loop in the background and a window running `agent-health`). Closing the launcher does
+not stop the agent; `stop-agent.cmd` does. It asks nothing: opening it starts an agent
+that trades. Full walkthrough, including what happens when the connection drops, in
+[docs/running-the-agent.md](docs/running-the-agent.md).
 
 `uv sync --extra llm` adds the LLM analyst on top. It fails open when absent, and
 without an `OPENAI_API_KEY` the engine falls back to a rule-based analyst that approves

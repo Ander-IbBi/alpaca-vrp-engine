@@ -4,9 +4,9 @@
 #   .\scripts\stop-agent.ps1             # same thing from a terminal
 #   .\scripts\stop-agent.ps1 -KeepPanel  # stop trading but leave the watcher open
 #
-# Closing the agent window by hand also works, but it tends to leave the panel running
-# and the pid file behind, which then reports a process that died minutes ago. This
-# tidies up all of it so the next start begins from a clean slate.
+# The wrapper runs hidden, so closing the launcher or the panel does nothing to it.
+# This script is the way out: it kills the loop, the restart wrapper and the panel,
+# and clears the pid file so the next start begins from a clean slate.
 
 param(
     [switch]$KeepPanel

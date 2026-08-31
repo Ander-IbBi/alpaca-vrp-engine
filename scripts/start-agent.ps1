@@ -1,5 +1,6 @@
-# Start the agent for the day: check the machine is ready, then hand off to the
-# restart-on-crash wrapper with a watcher window beside it.
+# Start the agent for the day: check the machine is ready, then spawn the
+# restart-on-crash wrapper in the background with a watcher window beside it.
+# Closing this launcher does not stop the agent; stop-agent.cmd does.
 #
 #   double-click start-agent.cmd            # the normal way in
 #   double-click stop-agent.cmd             # the way out
@@ -57,6 +58,45 @@ function Test-CredentialFailure($output) {
     return (($output | Out-String) -match '(401|403|[Uu]nauthorized|[Ff]orbidden|invalid.*key|ALPACA_API_KEY)')
 }
 
+function Test-CommandRunning([string]$needle) {
+    $self = $PID
+    $hit = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.ProcessId -ne $self -and $_.CommandLine -like "*$needle*"
+    }
+    return [bool]$hit
+}
+
+function Start-WatcherWindow {
+    if (Test-CommandRunning 'watch-agent.ps1') {
+        Write-Host '  Heartbeat panel is already open.' -ForegroundColor DarkGray
+        return
+    }
+    Start-Process powershell -ArgumentList @(
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-NoExit',
+        '-File', (Join-Path $PSScriptRoot 'watch-agent.ps1'),
+        '-Interval', "$Interval"
+    ) | Out-Null
+    Write-Host '  A second window is now watching the heartbeat.' -ForegroundColor DarkGray
+}
+
+function Wait-WrapperAlive([string]$pidPath, [int]$seconds = 15) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 400
+        if (-not (Test-Path $pidPath)) { continue }
+        $recorded = 0
+        $raw = (Get-Content $pidPath -ErrorAction SilentlyContinue | Select-Object -First 1)
+        if ([int]::TryParse(("$raw").Trim(), [ref]$recorded) -and $recorded -gt 0) {
+            if (Get-Process -Id $recorded -ErrorAction SilentlyContinue) {
+                return $recorded
+            }
+        }
+    }
+    return $null
+}
+
 Write-Host ''
 Write-Host '  VRP Engine launcher' -ForegroundColor Cyan
 Write-Host "  $repo" -ForegroundColor DarkGray
@@ -87,6 +127,8 @@ if (Test-Path $pidFile) {
 if ($alreadyRunning) {
     Write-Host "  An agent is already running (pid $alreadyRunning)." -ForegroundColor Yellow
     Write-Host '  Double-click stop-agent.cmd first if you want to restart it.' -ForegroundColor DarkGray
+    Write-Host ''
+    if (-not $NoWatcher) { Start-WatcherWindow }
     Write-Host ''
     exit 0
 }
@@ -154,23 +196,38 @@ if ($dry) {
     Write-Host '  Nothing will ask you to confirm a trade, now or later.' -ForegroundColor DarkGray
 }
 Write-Host "  Cadence: one cycle every ${Interval}s while the market is open." -ForegroundColor DarkGray
-Write-Host '  To stop: double-click stop-agent.cmd (or just close this window).' -ForegroundColor DarkGray
+Write-Host '  To stop: double-click stop-agent.cmd.' -ForegroundColor DarkGray
+Write-Host '  Closing this window (or the panel) leaves the agent running.' -ForegroundColor DarkGray
 Write-Host ''
 
-# --- The watcher window ------------------------------------------------------
+# --- Hand off to the wrapper in its own process ------------------------------
+#
+# The loop used to live in this window. Closing it (the natural thing once the
+# panel is open) killed the agent and left a stale pid file, which is exactly
+# what the panel then reported as "the launcher started something and it is gone".
+# The wrapper now runs hidden; this window is only the launcher.
 
-if (-not $NoWatcher) {
-    Start-Process powershell -ArgumentList @(
-        '-NoProfile',
-        '-ExecutionPolicy', 'Bypass',
-        '-NoExit',
-        '-File', (Join-Path $PSScriptRoot 'watch-agent.ps1'),
-        '-Interval', $Interval
-    ) | Out-Null
-    Write-Host '  A second window is now watching the heartbeat.' -ForegroundColor DarkGray
-    Write-Host ''
+$foreverArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', (Join-Path $PSScriptRoot 'run-forever.ps1'),
+    '-Interval', "$Interval"
+)
+if ($dry) { $foreverArgs += '-DryRun' }
+
+Start-Process -FilePath powershell -ArgumentList $foreverArgs -WindowStyle Hidden -WorkingDirectory $repo | Out-Null
+
+$wrapperPid = Wait-WrapperAlive $pidFile
+if (-not $wrapperPid) {
+    $log = Join-Path $repo 'data\agent.log'
+    Stop-WithAdvice "The wrapper did not stay up. Check $log"
 }
 
-# --- Hand off to the wrapper, which already knows how to restart -------------
+Write-Host "  Agent running in the background (pid $wrapperPid)." -ForegroundColor Green
+Write-Host "  Cycle log: $(Join-Path $repo 'data\agent.log')" -ForegroundColor DarkGray
+Write-Host ''
 
-& (Join-Path $PSScriptRoot 'run-forever.ps1') -DryRun:$dry -Interval $Interval
+if (-not $NoWatcher) {
+    Start-WatcherWindow
+    Write-Host ''
+}
